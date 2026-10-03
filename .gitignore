@@ -1,0 +1,13 @@
+.venv/
+__pycache__/
+.env
+*.pyc
+.streamlit/secrets.toml
+research_records/raw_data/**/*.csv
+research_records/raw_data/**/*.json
+research_records/experiment_manifests/*.json
+research_records/daily_reports/*.md
+research_records/parameter_experiments/*.csv
+research_records/sector_snapshots/*.csv
+research_records/experiments.csv
+
