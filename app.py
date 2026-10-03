@@ -1,6 +1,6 @@
 import streamlit as st
 
-st.set_page_config(page_title="MarketLab", page_icon="📈", layout="wide")
+st.set_page_config(page_title="Xiang's MarketLab", page_icon="📈", layout="wide")
 
 page = st.navigation([
     st.Page("stock_research.py", title="Stock Research", icon="📈", default=True),

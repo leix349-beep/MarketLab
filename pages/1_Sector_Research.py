@@ -14,7 +14,7 @@ h1 {letter-spacing:-.035em;} [data-testid="stMetric"] {background:rgba(255,255,2
 
 language=st.sidebar.radio("Language / 语言",["English","中文"],horizontal=True,key="global_language")
 zh=language=="中文"
-st.title("MarketLab · 板块研究" if zh else "MarketLab · Sector Research")
+st.title("Xiang’s MarketLab · 板块研究" if zh else "Xiang’s MarketLab · Sector Research")
 st.caption("独立的市场级研究空间，不依赖个股分析选择。" if zh else "A market-level research workspace independent of the selected stock analysis.")
 
 @st.cache_data(ttl=3600)

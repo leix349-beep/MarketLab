@@ -16,7 +16,7 @@ h1 {letter-spacing:-.035em;} [data-testid="stMetric"] {background:rgba(255,255,2
 
 language=st.sidebar.radio("Language / 语言",["English","中文"],horizontal=True,key="global_language")
 zh=language=="中文"
-st.title("MarketLab · 回归实验室" if zh else "MarketLab · Regression Lab")
+st.title("Xiang’s MarketLab · 回归实验室" if zh else "Xiang’s MarketLab · Regression Lab")
 st.caption("用市场模型区分系统性风险与标的特有变化。" if zh else "Use a market model to separate systematic exposure from asset-specific variation.")
 
 symbol=st.sidebar.selectbox("研究标的" if zh else "Research Asset",list(ASSETS),index=list(ASSETS).index("AAPL"),format_func=asset_label)

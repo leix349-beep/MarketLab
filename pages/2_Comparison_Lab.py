@@ -14,7 +14,7 @@ h1 {letter-spacing:-.035em;} [data-testid="stMetric"] {background:rgba(255,255,2
 
 language=st.sidebar.radio("Language / 语言",["English","中文"],horizontal=True,key="global_language")
 zh=language=="中文"
-st.title("MarketLab · 多资产对比" if zh else "MarketLab · Comparison Lab")
+st.title("Xiang’s MarketLab · 多资产对比" if zh else "Xiang’s MarketLab · Comparison Lab")
 st.caption("最多同时比较4个资产；所有曲线使用相同日期范围。" if zh else "Compare up to four assets over one synchronized date range.")
 
 selected=st.sidebar.multiselect("对比资产" if zh else "Assets",list(ASSETS),default=["SPY","QQQ","AAPL"],

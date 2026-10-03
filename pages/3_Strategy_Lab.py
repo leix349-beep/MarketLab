@@ -15,7 +15,7 @@ h1 {letter-spacing:-.035em;} [data-testid="stMetric"] {background:rgba(255,255,2
 
 language=st.sidebar.radio("Language / 语言",["English","中文"],horizontal=True,key="global_language")
 zh=language=="中文"
-st.title("MarketLab · 策略实验室" if zh else "MarketLab · Strategy Lab")
+st.title("Xiang’s MarketLab · 策略实验室" if zh else "Xiang’s MarketLab · Strategy Lab")
 st.caption("在相同数据、成本和成交时点下公平比较不同规则。" if zh else "Compare rule-based strategies under identical data, cost and execution assumptions.")
 
 symbol=st.sidebar.selectbox("股票 / ETF" if zh else "Stock / ETF",list(ASSETS),format_func=asset_label,key="strategy_symbol")

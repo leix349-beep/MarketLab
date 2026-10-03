@@ -22,7 +22,7 @@ h1 {letter-spacing:-0.035em;} h2,h3 {letter-spacing:-0.018em;}
 language = st.sidebar.radio("Language / 语言", ["English", "中文"], horizontal=True,key="global_language")
 zh = language == "中文"
 T = {
- "title": "MarketLab · 美股模拟交易研究台" if zh else "MarketLab · US Equity Research Lab",
+ "title": "Xiang’s MarketLab · 量化市场研究平台" if zh else "Xiang’s MarketLab · Quantitative Market Research",
  "caption": "研究与教育用途｜默认不发送任何订单｜先回测，再模拟" if zh else "Student research project · No orders are sent · Backtest before paper trading",
  "params": "研究参数" if zh else "Research Parameters", "asset": "股票 / ETF" if zh else "Stock / ETF",
  "years": "历史年数" if zh else "History (years)", "fast": "短期均线" if zh else "Fast Moving Average",
