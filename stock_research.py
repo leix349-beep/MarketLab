@@ -25,7 +25,7 @@ T = {
  "title": "Xiang’s MarketLab",
  "caption": "量化市场研究｜学生项目｜仅回测，不发送订单" if zh else "Quantitative market research · Student project · Backtests only",
  "params": "研究参数" if zh else "Research Parameters", "asset": "股票 / ETF" if zh else "Stock / ETF",
- "years": "历史年数" if zh else "History (years)", "fast": "短期均线" if zh else "Fast Moving Average",
+ "range": "历史范围" if zh else "History Range", "fast": "短期均线" if zh else "Fast Moving Average",
  "slow": "长期均线" if zh else "Slow Moving Average", "rsi": "买入 RSI 上限" if zh else "Maximum Buy RSI",
  "stop": "止损 %" if zh else "Stop Loss %", "take": "止盈 %" if zh else "Take Profit %",
  "cost": "手续费/滑点 %" if zh else "Fees / Slippage %", "run": "运行研究" if zh else "Run Analysis",
@@ -35,7 +35,19 @@ st.title(T["title"]); st.caption(T["caption"])
 with st.sidebar:
     st.subheader("分析设置" if zh else "Analysis Setup")
     symbol=st.selectbox(T["asset"], list(ASSETS), format_func=asset_label)
-    years=st.slider(T["years"], 1, 10, 5)
+    history_options = {
+        "120 天" if zh else "120 Days": 120,
+        "6 个月" if zh else "6 Months": 183,
+        "1 年" if zh else "1 Year": 365,
+        "2 年" if zh else "2 Years": 730,
+        "3 年" if zh else "3 Years": 1095,
+        "5 年" if zh else "5 Years": 1825,
+        "10 年" if zh else "10 Years": 3650,
+    }
+    history_label=st.selectbox(T["range"], list(history_options), index=5)
+    history_days=history_options[history_label]
+    st.caption("行情仍按每个交易日模拟；这里仅控制回看长度。" if zh else
+               "The model still runs on every trading day; this only changes the lookback span.")
     with st.expander("策略参数" if zh else "Strategy Parameters",expanded=False):
         fast=st.slider(T["fast"], 5, 40, 20)
         slow=st.slider(T["slow"], 30, 200, 60)
@@ -48,7 +60,7 @@ with st.sidebar:
 if run:
     st.session_state.pop("grid_result", None)
     st.session_state.analysis_params = {
-        "symbol": symbol, "years": years, "fast": fast, "slow": slow,
+        "symbol": symbol, "history_days": history_days, "history_label": history_label, "fast": fast, "slow": slow,
         "rsi": rsi, "stop": stop, "take": take, "fee": fee,
     }
 
@@ -60,23 +72,28 @@ def prices(ticker, start):
 
 if "analysis_params" in st.session_state:
     active = st.session_state.analysis_params
-    symbol, years = active["symbol"], active["years"]
+    symbol = active["symbol"]
+    history_days = active.get("history_days", int(active.get("years", 5) * 365))
+    history_label = active.get("history_label", f"{active.get('years', 5)} years")
     fast, slow, rsi = active["fast"], active["slow"], active["rsi"]
     stop, take, fee = active["stop"], active["take"], active["fee"]
     try:
-        start=date.today()-timedelta(days=years*365+30)
+        start=date.today()-timedelta(days=history_days+30)
         df=prices(symbol, start)
         if df.empty: raise ValueError("没有取得行情数据")
+        if len(df) <= slow + 5:
+            raise ValueError((f"当前历史范围只有 {len(df)} 个交易日，不足以计算 MA{slow}；请扩大历史范围或缩短长期均线。" if zh else
+                              f"This range contains only {len(df)} trading days, not enough for MA{slow}. Choose a longer range or a shorter slow average."))
         spy=prices("SPY", start); sector_symbol=sector_etf_for(symbol)
         sector=prices(sector_symbol, start)
         stats=risk_metrics(df["Close"],spy["Close"])
         curve,trades,m=backtest(df,fast,slow,rsi,stop,take,fee)
         if run:
-            experiment_params={"history_years":years,"fast_ma":fast,"slow_ma":slow,"rsi_limit":rsi,
+            experiment_params={"history_range":history_label,"history_days":history_days,"fast_ma":fast,"slow_ma":slow,"rsi_limit":rsi,
                                "stop_loss":stop,"take_profit":take,"cost":fee}
             experiment_metrics={"strategy_return":m["总收益"],"max_drawdown":m["最大回撤"],
                                 "sharpe":m["夏普比率"],"trades":m["交易次数"]}
-            save_experiment(symbol, years, experiment_params, experiment_metrics)
+            save_experiment(symbol, round(history_days/365, 3), experiment_params, experiment_metrics)
             snapshot=archive_market_data(df,symbol,{"source":"Yahoo Finance via yfinance","interval":"1d","auto_adjust":True})
             archive_experiment(symbol,snapshot,experiment_params,experiment_metrics)
         benchmark=df.loc[curve.index,"Close"]/df.loc[curve.index,"Close"].iloc[0]*10000
@@ -89,6 +106,22 @@ if "analysis_params" in st.session_state:
         fig.add_scatter(x=benchmark.index,y=benchmark,name="买入并持有" if zh else "Buy and Hold")
         fig.update_layout(height=420,margin=dict(l=10,r=10,t=30,b=10),yaxis_title="账户价值（美元）" if zh else "Portfolio Value (USD)")
         st.plotly_chart(fig,use_container_width=True)
+        benchmark_return=benchmark.iloc[-1]/10000-1
+        position=pd.Series(0.0,index=curve.index)
+        for trade in trades.itertuples(index=False):
+            position.loc[position.index>=trade.date] = 1.0 if trade.action == "buy" else 0.0
+        exposure=float(position.mean()) if len(position) else 0.0
+        gap=m["总收益"]-benchmark_return
+        if zh:
+            explanation=(f"策略比买入并持有低 **{-gap:.1%}**。它约有 **{exposure:.0%}** 的交易日持仓；"
+                         "在持续上涨的市场中，止盈、止损或趋势过滤会让策略较早离场，因此可能少赚，但不一定说明代码错误。"
+                         "应结合最大回撤和样本外验证判断。" if gap < 0 else
+                         f"策略比买入并持有高 **{gap:.1%}**，约有 **{exposure:.0%}** 的交易日持仓；仍需用样本外验证确认不是参数巧合。")
+        else:
+            explanation=(f"The strategy trails buy and hold by **{-gap:.1%}** and is invested on about **{exposure:.0%}** of trading days. "
+                         "In a persistent bull market, profit-taking, stops, and trend filters can exit early. That does not by itself indicate a coding error; compare drawdown and out-of-sample results." if gap < 0 else
+                         f"The strategy leads buy and hold by **{gap:.1%}** and is invested on about **{exposure:.0%}** of trading days. Out-of-sample validation is still needed.")
+        st.info(explanation)
 
         st.subheader("标的资产风险与基准分析" if zh else "Underlying Asset Risk & Benchmark Analysis")
         e,f,g,h,i=st.columns(5)
@@ -182,7 +215,6 @@ if "analysis_params" in st.session_state:
         with tab3:
             last=float(df.Close.iloc[-1]); action_key="hold"
             if len(trades): action_key=str(trades.iloc[-1]["action"])
-            benchmark_return=benchmark.iloc[-1]/10000-1
             action_zh={"buy":"买入","sell":"卖出","hold":"观望"}.get(action_key,action_key)
             action_en={"buy":"Buy","sell":"Sell","hold":"Hold"}.get(action_key,action_key)
             if zh:
