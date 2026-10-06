@@ -109,10 +109,25 @@ if "analysis_params" in st.session_state:
         chart_tab,math_tab,tab1,tab2,tab3=tabs
         with chart_tab:
             candle=go.Figure(data=[go.Candlestick(x=df.index,open=df.Open,high=df.High,low=df.Low,close=df.Close,name=symbol)])
-            candle.add_scatter(x=df.index,y=df.Close.rolling(fast).mean(),name=f"MA {fast}")
-            candle.add_scatter(x=df.index,y=df.Close.rolling(slow).mean(),name=f"MA {slow}")
+            candle.add_scatter(x=df.index,y=df.Close.rolling(fast).mean(),name=(f"{fast}日移动平均线 (MA{fast})" if zh else f"{fast}-Day Moving Average (MA{fast})"))
+            candle.add_scatter(x=df.index,y=df.Close.rolling(slow).mean(),name=(f"{slow}日移动平均线 (MA{slow})" if zh else f"{slow}-Day Moving Average (MA{slow})"))
+            buys=trades.loc[trades.action=="buy"] if len(trades) else trades
+            sells=trades.loc[trades.action=="sell"] if len(trades) else trades
+            if len(buys):
+                candle.add_scatter(x=buys.date,y=buys.price,mode="markers",name="模型买入" if zh else "Model Buy",
+                                   marker=dict(symbol="triangle-up",size=12,color="#16a34a"))
+            if len(sells):
+                candle.add_scatter(x=sells.date,y=sells.price,mode="markers",name="模型卖出" if zh else "Model Sell",
+                                   marker=dict(symbol="triangle-down",size=12,color="#dc2626"))
             candle.update_layout(height=500,xaxis_rangeslider_visible=False,margin=dict(l=10,r=10,t=30,b=10))
             st.plotly_chart(candle,use_container_width=True)
+            with st.expander("如何阅读这张图" if zh else "How to Read This Chart"):
+                st.markdown((f"- **MA{fast}**：最近 {fast} 个交易日的平均收盘价，反应较快。\n"
+                             f"- **MA{slow}**：最近 {slow} 个交易日的平均收盘价，更能反映中期方向。\n"
+                             "- 短均线在长均线上方表示趋势偏强；三角形是模型按次日开盘价模拟的动作，不是实时交易建议。") if zh else
+                            (f"- **MA{fast}:** average closing price over the latest {fast} trading days; reacts faster.\n"
+                             f"- **MA{slow}:** average over {slow} trading days; reflects the medium-term direction.\n"
+                             "- A fast average above the slow average indicates a stronger trend. Triangles are simulated next-open actions, not live advice."))
             volume=px.bar(df,x=df.index,y="Volume",labels={"Volume":"成交量" if zh else "Volume","index":"日期" if zh else "Date"})
             volume.update_layout(height=220,margin=dict(l=10,r=10,t=10,b=10)); st.plotly_chart(volume,use_container_width=True)
         with math_tab:

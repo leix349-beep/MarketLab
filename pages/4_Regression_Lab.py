@@ -73,7 +73,9 @@ if "regression_request" in st.session_state:
         car=px.line(abnormal,labels={"value":"累计异常收益" if zh else "Cumulative Abnormal Return","index":"日期" if zh else "Date"},title="累计异常收益" if zh else "Cumulative Abnormal Return")
         car.update_yaxes(tickformat=".0%"); car.update_layout(height=360,showlegend=False,margin=dict(l=10,r=10,t=45,b=10)); st.plotly_chart(car,width="stretch")
     st.markdown("### "+("数学模型" if zh else "Mathematical Model"))
-    st.latex(r"r_{asset,t}=\alpha+\beta r_{market,t}+\varepsilon_t")
+    st.latex(fr"r_{{\mathrm{{{q['symbol']}}},t}}=\alpha+\beta r_{{\mathrm{{{q['benchmark']}}},t}}+\varepsilon_t")
+    st.caption((f"r_{{{q['symbol']},t}} 是 {q['symbol']} 在第 t 个交易日的收益率；r_{{{q['benchmark']},t}} 是同期基准收益率。" if zh else
+                f"r({q['symbol']}, t) is the {q['symbol']} return on trading day t; r({q['benchmark']}, t) is the benchmark return on the same day."))
     if zh:
         st.markdown("- **Beta**：标的对市场变化的敏感度。\n- **Alpha**：模型无法由市场暴露解释的平均收益。\n- **R²**：标的收益变化中，可被市场模型解释的比例。\n- **残差 ε**：公司、行业、新闻和随机因素留下的未解释部分。\n- **Bootstrap区间**：反复重抽样，衡量Beta估计的不确定性。")
     else:
