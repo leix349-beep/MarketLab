@@ -172,7 +172,7 @@ Completion standard: unattended paper execution remains auditable, bounded and r
 
 ## 10. Research outputs
 
-- [ ] Daily research journal
+- [~] Automated weekday market snapshots and daily research journal
 - [ ] Weekly strategy review
 - [ ] Monthly performance report
 - [ ] Reproducible experiment catalog

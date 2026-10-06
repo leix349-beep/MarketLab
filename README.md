@@ -11,6 +11,7 @@ This is a student research project, not an investing service. It uses historical
 - Multi-asset return, risk, and correlation comparisons
 - Side-by-side strategy experiments
 - A regression lab for Alpha, Beta, R², residuals, and confidence intervals
+- Automated weekday market snapshots recorded after the U.S. market close
 - English and Chinese interfaces
 
 One question I am exploring is whether simple, explainable signals can improve risk-adjusted results after realistic costs and out-of-sample testing.
