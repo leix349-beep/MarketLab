@@ -26,6 +26,7 @@ with st.sidebar.expander("模型参数" if zh else "Model Parameters",expanded=F
     rsi_entry=st.slider("均值回归买入 RSI" if zh else "Mean-Reversion Entry RSI",15,45,30)
     rsi_exit=st.slider("均值回归退出 RSI" if zh else "Mean-Reversion Exit RSI",45,75,55)
     breakout=st.slider("突破窗口" if zh else "Breakout Window",20,120,55)
+    target_vol=st.slider("目标年化波动率 %" if zh else "Target Annualized Volatility %",6,25,12)/100
     fee=st.number_input("手续费/滑点 %" if zh else "Fees / Slippage %",0.0,1.0,.10,.05)/100
 run=st.sidebar.button("比较策略" if zh else "Compare Strategies",type="primary",width="stretch")
 
@@ -37,13 +38,14 @@ def prices(ticker,start):
 
 if run:
     st.session_state.strategy_request={"symbol":symbol,"years":years,"fast":fast,"slow":slow,
-        "rsi_entry":rsi_entry,"rsi_exit":rsi_exit,"breakout_window":breakout,"fee":fee}
+        "rsi_entry":rsi_entry,"rsi_exit":rsi_exit,"breakout_window":breakout,"target_vol":target_vol,"fee":fee}
 
 if "strategy_request" in st.session_state:
     q=st.session_state.strategy_request
     df=prices(q["symbol"],date.today()-timedelta(days=q["years"]*365+220))
+    # Volatility targeting is a separate candidate and never replaces the baseline silently.
     results,curves=compare_strategies(df,fast=q["fast"],slow=q["slow"],rsi_entry=q["rsi_entry"],
-        rsi_exit=q["rsi_exit"],breakout_window=q["breakout_window"],fee=q["fee"])
+        rsi_exit=q["rsi_exit"],breakout_window=q["breakout_window"],target_vol=q.get("target_vol",.12),fee=q["fee"])
     if run: archive_parameter_experiment(results,q["symbol"]+"_strategy_comparison")
     best=results.iloc[0]; top_return=results.sort_values("Total Return",ascending=False).iloc[0]
     passive=results[results.Strategy=="Buy & Hold"].iloc[0]
@@ -56,8 +58,8 @@ if "strategy_request" in st.session_state:
     fig=px.line(normalized,labels={"value":"起点=100" if zh else "Growth of $100","index":"日期" if zh else "Date","variable":"策略" if zh else "Strategy"})
     fig.update_layout(height=480,margin=dict(l=10,r=10,t=25,b=10)); st.plotly_chart(fig,width="stretch")
     shown=results.copy()
-    if zh: shown=shown.rename(columns={"Strategy":"策略","Total Return":"累计收益","Annualized Return":"年化收益","Maximum Drawdown":"最大回撤","Sharpe Ratio":"夏普比率","Trade Actions":"交易动作数"})
-    pct=["累计收益","年化收益","最大回撤"] if zh else ["Total Return","Annualized Return","Maximum Drawdown"]
+    if zh: shown=shown.rename(columns={"Strategy":"策略","Total Return":"累计收益","Annualized Return":"年化收益","Maximum Drawdown":"最大回撤","Sharpe Ratio":"夏普比率","Calmar Ratio":"Calmar比率","Average Exposure":"平均仓位","Trade Actions":"交易动作数"})
+    pct=["累计收益","年化收益","最大回撤","平均仓位"] if zh else ["Total Return","Annualized Return","Maximum Drawdown","Average Exposure"]
     shown[pct]=shown[pct]*100
     st.dataframe(shown,width="stretch",hide_index=True,column_config={c:st.column_config.NumberColumn(format="%.2f%%") for c in pct})
     active=results[results.Strategy!="Buy & Hold"].sort_values("Sharpe Ratio",ascending=False).iloc[0]
@@ -69,8 +71,8 @@ if "strategy_request" in st.session_state:
     else:
         st.info(f"In this sample, the highest-Sharpe active rule is **{active.Strategy}**. Its cumulative-return difference versus buy and hold is {return_gap:+.1%}, while its maximum-drawdown difference is {drawdown_improvement:+.1%}. Lower downside risk may carry an opportunity cost; this result still requires out-of-sample validation.")
     st.markdown("### "+("策略定义" if zh else "Strategy Definitions"))
-    definitions=("- **趋势策略**：短均线高于长均线时持有。\n- **均值回归**：RSI低于阈值买入，高于退出阈值卖出。\n- **突破策略**：价格突破过去窗口高点后持有，跌破20日均线退出。\n- **趋势 + RSI**：趋势为正且RSI不过热时进入，趋势反转后退出。" if zh else
-    "- **Trend:** hold while the fast moving average is above the slow moving average.\n- **Mean Reversion:** enter below the RSI threshold and exit above the recovery threshold.\n- **Breakout:** enter above the prior rolling high and exit below the 20-day average.\n- **Trend + RSI:** enter during a positive trend when RSI is not overheated; exit on trend reversal.")
+    definitions=("- **趋势策略**：短均线高于长均线时持有。\n- **均值回归**：RSI低于阈值买入，高于退出阈值卖出。\n- **突破策略**：价格突破过去窗口高点后持有，跌破20日均线退出。\n- **趋势 + RSI**：趋势为正且RSI不过热时进入，趋势反转后退出。\n- **波动率目标趋势**：不设固定止盈；趋势向上时持有，并在波动升高时自动降低仓位。" if zh else
+    "- **Trend:** hold while the fast moving average is above the slow moving average.\n- **Mean Reversion:** enter below the RSI threshold and exit above the recovery threshold.\n- **Breakout:** enter above the prior rolling high and exit below the 20-day average.\n- **Trend + RSI:** enter during a positive trend when RSI is not overheated; exit on trend reversal.\n- **Vol-Target Trend:** no fixed take-profit; stay invested in an uptrend and reduce exposure when volatility rises.")
     st.markdown(definitions)
     st.warning("所有策略均为历史模拟，尚未完成样本外滚动验证。" if zh else "All strategies are historical simulations and have not yet passed walk-forward out-of-sample validation.")
 else:
