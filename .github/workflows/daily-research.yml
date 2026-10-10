@@ -2,8 +2,10 @@ name: Daily market research
 
 on:
   schedule:
-    - cron: "30 14 * * 1-5"
-      timezone: "America/Los_Angeles"
+    # Two post-close attempts. If the first download is still stale, the
+    # second run can capture the completed daily bar without duplicating files.
+    - cron: "30 23 * * 1-5"
+    - cron: "30 2 * * 2-6"
   workflow_dispatch:
 
 permissions:

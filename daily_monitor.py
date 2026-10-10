@@ -114,6 +114,7 @@ def main() -> None:
     snapshot.to_csv(OUTPUT_DIR / f"{market_date}.csv", index=False)
     (OUTPUT_DIR / f"{market_date}.md").write_text(markdown_report(snapshot), encoding="utf-8")
     print(f"Saved {len(snapshot)} observations for {market_date}.")
+    print("Freshness is evaluated in the Daily Monitor; duplicate market dates are intentionally not recommitted.")
 
 
 if __name__ == "__main__":

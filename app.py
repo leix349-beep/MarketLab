@@ -9,5 +9,6 @@ page = st.navigation([
     st.Page("pages/3_Strategy_Lab.py", title="Strategy Lab", icon="🧪"),
     st.Page("pages/4_Regression_Lab.py", title="Regression Lab", icon="📐"),
     st.Page("pages/5_Validation_Lab.py", title="Validation Lab", icon="✅"),
+    st.Page("pages/6_Daily_Monitor.py", title="Daily Monitor", icon="📅"),
 ])
 page.run()
