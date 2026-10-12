@@ -1,4 +1,5 @@
 from datetime import date
+from pathlib import Path
 
 import pandas as pd
 import plotly.express as px
@@ -103,3 +104,21 @@ else:
 
 st.caption("RSI和均线描述当前状态，不单独构成买卖建议。" if zh else
            "RSI and moving averages describe current conditions; neither is a standalone trading recommendation.")
+
+factor_path = Path("published_research/daily/global_factors") / f"{latest_date:%Y-%m-%d}.csv"
+news_path = Path("published_research/daily/news_context") / f"{latest_date:%Y-%m-%d}.csv"
+if factor_path.exists():
+    factors = pd.read_csv(factor_path)
+    st.subheader("全球市场因子" if zh else "Global Market Factors")
+    global_shown = factors[["factor", "ticker", "return_1d", "return_5d", "return_21d", "volatility_21d"]].copy()
+    for column in ["return_1d", "return_5d", "return_21d", "volatility_21d"]:
+        global_shown[column] *= 100
+    st.dataframe(global_shown, width="stretch", hide_index=True,
+                 column_config={c: st.column_config.NumberColumn(format="%.2f%%") for c in ["return_1d", "return_5d", "return_21d", "volatility_21d"]})
+if news_path.exists():
+    news = pd.read_csv(news_path)
+    st.subheader("国际局势观察" if zh else "International Situation Watch")
+    st.caption("标题用于构建风险情景，不等同于已核实事实，也不会单独触发交易。" if zh else
+               "Headlines support risk scenarios; they are not verified facts and never trigger trades alone.")
+    for row in news.groupby("category", sort=False).head(2).itertuples(index=False):
+        st.markdown(f"- **{row.category}:** [{row.title}]({row.url}) — {row.source}")

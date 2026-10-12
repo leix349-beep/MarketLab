@@ -13,6 +13,7 @@ import pandas as pd
 import yfinance as yf
 
 from strategy import indicators
+from global_context import context_assessment, download_global_factors, fetch_news_context, market_regime
 
 
 WATCHLIST = ["SPY", "QQQ", "IWM", "AAPL", "MSFT", "NVDA", "XLK", "XLE", "XLF"]
@@ -73,7 +74,8 @@ def download_snapshot() -> pd.DataFrame:
     return pd.DataFrame(rows).sort_values("ticker").reset_index(drop=True)
 
 
-def markdown_report(snapshot: pd.DataFrame) -> str:
+def markdown_report(snapshot: pd.DataFrame, factors: pd.DataFrame | None = None,
+                    news: pd.DataFrame | None = None) -> str:
     market_date = snapshot["date"].max()
     ranked = snapshot.sort_values("return_21d", ascending=False)
     lines = [
@@ -104,6 +106,26 @@ def markdown_report(snapshot: pd.DataFrame) -> str:
         "Adjusted daily prices from Yahoo Finance via `yfinance`. Moving averages use 20 and 60 trading days; RSI uses 14 trading days. No orders are generated.",
         "",
     ]
+    if factors is not None and not factors.empty:
+        regime = market_regime(factors)
+        assessment = context_assessment(regime, news if news is not None else pd.DataFrame())
+        lines += [
+            "## Global Market Context", "",
+            f"- Market regime: **{assessment['market_regime']}** (score {assessment['market_score']:+d})",
+            f"- Headline-risk score: **{assessment['headline_risk_score']:+.2f}**",
+            f"- Cross-check: **{assessment['stance']}**", "",
+            "Market score uses US equities, emerging markets, credit versus Treasuries, and VIX. "
+            "Headline risk is a keyword-based research feature, not verified sentiment or a forecast probability.", "",
+            "| Factor | Ticker | 1D | 5D | 21D |", "|---|---:|---:|---:|---:|",
+        ]
+        for row in factors.sort_values("factor").itertuples(index=False):
+            lines.append(f"| {row.factor} | {row.ticker} | {row.return_1d:.2%} | {row.return_5d:.2%} | {row.return_21d:.2%} |")
+        lines.append("")
+    if news is not None and not news.empty:
+        lines += ["## International Situation Watch", ""]
+        for row in news.groupby("category", sort=False).head(2).itertuples(index=False):
+            lines.append(f"- **{row.category}:** [{row.title}]({row.url}) — {row.source}")
+        lines += ["", "Headlines are collected for scenario monitoring. They are not treated as facts until independently verified, and they do not generate orders.", ""]
     return "\n".join(lines)
 
 
@@ -111,8 +133,25 @@ def main() -> None:
     snapshot = download_snapshot()
     market_date = snapshot["date"].max()
     OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
-    snapshot.to_csv(OUTPUT_DIR / f"{market_date}.csv", index=False)
-    (OUTPUT_DIR / f"{market_date}.md").write_text(markdown_report(snapshot), encoding="utf-8")
+    snapshot_path = OUTPUT_DIR / f"{market_date}.csv"
+    if snapshot_path.exists():
+        print(f"Market date {market_date} is already archived; preserving the original observation without backfilling newer context.")
+        return
+    try:
+        factors = download_global_factors()
+    except Exception as exc:
+        print(f"Global factors unavailable: {exc}")
+        factors = pd.DataFrame()
+    news = fetch_news_context()
+    snapshot.to_csv(snapshot_path, index=False)
+    factor_dir = OUTPUT_DIR / "global_factors"; factor_dir.mkdir(exist_ok=True)
+    news_dir = OUTPUT_DIR / "news_context"; news_dir.mkdir(exist_ok=True)
+    if not factors.empty:
+        factors.to_csv(factor_dir / f"{market_date}.csv", index=False)
+    news_path = news_dir / f"{market_date}.csv"
+    if not news.empty and not news_path.exists():
+        news.to_csv(news_path, index=False)
+    (OUTPUT_DIR / f"{market_date}.md").write_text(markdown_report(snapshot, factors, news), encoding="utf-8")
     print(f"Saved {len(snapshot)} observations for {market_date}.")
     print("Freshness is evaluated in the Daily Monitor; duplicate market dates are intentionally not recommitted.")
 

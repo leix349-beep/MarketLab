@@ -30,9 +30,13 @@ class DailyMonitorTests(unittest.TestCase):
 
     def test_report_contains_disclaimer_and_ticker(self):
         snapshot = pd.DataFrame([summarize("TEST", self.sample())])
-        report = markdown_report(snapshot)
+        factors = pd.DataFrame([
+            {"ticker":"SPY","factor":"US Equities","return_1d":.01,"return_5d":.02,"return_21d":.03},
+        ])
+        report = markdown_report(snapshot, factors)
         self.assertIn("TEST", report)
         self.assertIn("not investment advice", report)
+        self.assertIn("Global Market Context", report)
 
 
 if __name__ == "__main__":
