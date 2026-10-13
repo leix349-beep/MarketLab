@@ -13,23 +13,23 @@ Chronological out-of-sample research result. This model does not place orders.
 
 | Asset | OOS rows | Accuracy | Edge vs naive | Balanced acc. | Exposure | Signal win rate | Model return | Buy & hold | Max drawdown |
 |---|---:|---:|---:|---:|---:|---:|---:|---:|---:|
-| IWM | 1,689 | 52.8% | -0.5% | 49.7% | 15.5% | 53.8% | -14.5% | 80.2% | -30.4% |
-| QQQ | 1,689 | 58.4% | -0.5% | 49.6% | 13.8% | 51.9% | 1.5% | 257.9% | -13.7% |
 | SPY | 1,689 | 59.7% | -0.5% | 49.6% | 7.6% | 53.9% | -17.7% | 160.5% | -23.0% |
-| XLE | 1,689 | 54.8% | -1.3% | 51.2% | 17.2% | 54.6% | -31.8% | 180.3% | -52.9% |
-| XLF | 1,689 | 54.1% | -2.1% | 48.5% | 17.5% | 51.5% | -11.1% | 98.4% | -29.0% |
+| QQQ | 1,689 | 58.4% | -0.5% | 49.6% | 13.8% | 51.9% | 1.5% | 257.9% | -13.7% |
+| IWM | 1,689 | 52.8% | -0.5% | 49.7% | 15.5% | 53.8% | -14.5% | 80.2% | -30.4% |
 | XLK | 1,689 | 58.0% | -0.4% | 49.8% | 12.7% | 53.7% | -17.8% | 347.1% | -20.5% |
+| XLF | 1,689 | 54.1% | -2.1% | 48.5% | 17.5% | 51.5% | -11.1% | 98.4% | -29.0% |
+| XLE | 1,689 | 54.8% | -1.3% | 51.2% | 17.2% | 54.6% | -31.8% | 180.3% | -52.9% |
 
 ## Risk / Return Balance
 
 | Asset | Model ann. return | B&H ann. return | Model vol. | B&H vol. | Model Sharpe | B&H Sharpe | Model Calmar | B&H Calmar |
 |---|---:|---:|---:|---:|---:|---:|---:|---:|
-| IWM | -2.3% | 9.2% | 15.5% | 24.8% | -0.07 | 0.48 | -0.08 | 0.23 |
-| QQQ | 0.2% | 20.9% | 10.9% | 22.8% | 0.07 | 0.95 | 0.02 | 0.62 |
 | SPY | -2.9% | 15.3% | 7.6% | 18.5% | -0.34 | 0.87 | -0.12 | 0.48 |
-| XLE | -5.6% | 16.6% | 20.5% | 31.6% | -0.17 | 0.65 | -0.10 | 0.30 |
-| XLF | -1.7% | 10.8% | 13.9% | 22.7% | -0.06 | 0.57 | -0.06 | 0.27 |
+| QQQ | 0.2% | 20.9% | 10.9% | 22.8% | 0.07 | 0.95 | 0.02 | 0.62 |
+| IWM | -2.3% | 9.2% | 15.5% | 24.8% | -0.07 | 0.48 | -0.08 | 0.23 |
 | XLK | -2.9% | 25.0% | 9.1% | 25.2% | -0.27 | 1.01 | -0.14 | 0.77 |
+| XLF | -1.7% | 10.8% | 13.9% | 22.7% | -0.06 | 0.57 | -0.06 | 0.27 |
+| XLE | -5.6% | 16.6% | 20.5% | 31.6% | -0.17 | 0.65 | -0.10 | 0.30 |
 
 ## Downside-Risk Filter Candidate: REJECTED AS A TRADING MODEL
 
@@ -39,12 +39,12 @@ Chronological out-of-sample research result. This model does not place orders.
 
 | Asset | Risk event rate | ROC AUC | Risk recall | Exit rate | Ann. return | Model Sharpe | B&H Sharpe | Model DD | B&H DD |
 |---|---:|---:|---:|---:|---:|---:|---:|---:|---:|
-| IWM | 19.8% | 0.441 | 2.6% | 6.1% | 7.0% | 0.44 | 0.66 | -28.7% | -30.4% |
-| QQQ | 19.9% | 0.549 | 17.5% | 16.4% | 9.3% | 0.61 | 0.94 | -43.1% | -35.1% |
 | SPY | 13.3% | 0.580 | 11.7% | 8.3% | 11.4% | 0.86 | 1.07 | -23.2% | -23.2% |
-| XLE | 23.6% | 0.462 | 9.0% | 9.6% | 20.3% | 0.88 | 1.05 | -22.0% | -22.5% |
-| XLF | 15.5% | 0.504 | 3.3% | 3.4% | 14.0% | 0.82 | 0.91 | -23.7% | -24.9% |
+| QQQ | 19.9% | 0.549 | 17.5% | 16.4% | 9.3% | 0.61 | 0.94 | -43.1% | -35.1% |
+| IWM | 19.8% | 0.441 | 2.6% | 6.1% | 7.0% | 0.44 | 0.66 | -28.7% | -30.4% |
 | XLK | 21.3% | 0.497 | 12.4% | 13.9% | 9.8% | 0.56 | 1.02 | -41.4% | -31.9% |
+| XLF | 15.5% | 0.504 | 3.3% | 3.4% | 14.0% | 0.82 | 0.91 | -23.7% | -24.9% |
+| XLE | 23.6% | 0.462 | 9.0% | 9.6% | 20.3% | 0.88 | 1.05 | -22.0% | -22.5% |
 
 ## Cross-Asset Risk Candidate: REJECTED AS A TRADING MODEL
 
@@ -56,12 +56,12 @@ Uses credit versus Treasuries, the dollar, gold, VIX, SPY trend and market bread
 
 | Asset | ROC AUC | Risk recall | Exit rate | Avg threshold | No-filter fallback | Ann. return | Model Sharpe | B&H Sharpe | Model DD | B&H DD |
 |---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
-| IWM | 0.450 | 28.2% | 24.4% | 0.27 | 0.0% | 8.0% | 0.52 | 0.66 | -31.3% | -30.4% |
-| QQQ | 0.536 | 28.8% | 28.9% | 0.25 | 0.0% | 7.0% | 0.49 | 0.94 | -29.8% | -35.1% |
 | SPY | 0.590 | 39.8% | 31.6% | 0.25 | 0.0% | 9.5% | 0.86 | 1.07 | -23.2% | -23.2% |
-| XLE | 0.463 | 26.4% | 26.1% | 0.41 | 8.1% | 13.1% | 0.66 | 1.05 | -23.3% | -22.5% |
-| XLF | 0.548 | 35.7% | 39.0% | 0.27 | 4.1% | -1.1% | -0.01 | 0.91 | -29.7% | -24.9% |
+| QQQ | 0.536 | 28.8% | 28.9% | 0.25 | 0.0% | 7.0% | 0.49 | 0.94 | -29.8% | -35.1% |
+| IWM | 0.450 | 28.2% | 24.4% | 0.27 | 0.0% | 8.0% | 0.52 | 0.66 | -31.3% | -30.4% |
 | XLK | 0.488 | 23.9% | 25.6% | 0.26 | 0.0% | 9.2% | 0.54 | 1.02 | -29.3% | -31.9% |
+| XLF | 0.548 | 35.7% | 39.0% | 0.27 | 4.1% | -1.1% | -0.01 | 0.91 | -29.7% | -24.9% |
+| XLE | 0.463 | 26.4% | 26.1% | 0.41 | 8.1% | 13.1% | 0.66 | 1.05 | -23.3% | -22.5% |
 
 
 ## Portfolio Regime Candidate: REJECTED AS A TRADING MODEL
@@ -99,28 +99,32 @@ States use information available on each decision date: SPY MA20/60 trend, VIX 2
 
 ## Volatility-Target Robustness: NOT YET ROBUST
 
-- Higher Sharpe across assets: **2 / 6**
-- Smaller drawdown across assets: **6 / 6**
+- Higher Sharpe across assets: **5 / 10**
+- Smaller drawdown across assets: **10 / 10**
 - Higher Sharpe across calendar years: **2 / 10**
 
 | Scope | Asset / period | Observations | Vol-target ann. return | Vol-target Sharpe | Vol-target DD | B&H ann. return | B&H Sharpe | B&H DD |
 |---|---|---:|---:|---:|---:|---:|---:|---:|
+| Asset | GLD | 489 | 11.1% | 0.90 | -19.2% | 13.3% | 0.83 | -23.2% |
+| Asset | HYG | 489 | 3.6% | 0.51 | -15.5% | 4.2% | 0.51 | -18.9% |
 | Asset | IWM | 489 | 3.3% | 0.30 | -22.8% | 9.2% | 0.49 | -38.6% |
 | Asset | QQQ | 489 | 13.3% | 1.03 | -17.2% | 21.5% | 1.00 | -34.6% |
 | Asset | SPY | 489 | 10.8% | 0.90 | -16.1% | 15.4% | 0.90 | -28.7% |
+| Asset | TLT | 489 | -1.5% | -0.08 | -40.9% | -1.8% | -0.06 | -47.6% |
+| Asset | UUP | 489 | 3.1% | 0.49 | -12.6% | 2.9% | 0.46 | -14.1% |
 | Asset | XLE | 489 | 1.9% | 0.20 | -42.6% | 10.1% | 0.47 | -64.6% |
 | Asset | XLF | 489 | 5.2% | 0.43 | -23.3% | 11.0% | 0.58 | -37.0% |
 | Asset | XLK | 489 | 14.0% | 1.07 | -14.1% | 25.4% | 1.08 | -31.6% |
-| Calendar year | 2017 | 49 | 20.1% | 3.05 | -2.9% | 21.9% | 3.01 | -2.9% |
-| Calendar year | 2018 | 50 | -9.2% | -0.52 | -15.9% | -9.2% | -0.30 | -23.3% |
-| Calendar year | 2019 | 51 | 15.2% | 1.36 | -7.4% | 30.5% | 2.04 | -7.7% |
-| Calendar year | 2020 | 50 | 0.2% | 0.09 | -16.2% | 12.7% | 0.51 | -35.2% |
-| Calendar year | 2021 | 51 | 18.4% | 1.69 | -4.1% | 34.7% | 1.93 | -5.5% |
-| Calendar year | 2022 | 50 | -9.0% | -0.78 | -10.5% | -12.3% | -0.40 | -19.2% |
-| Calendar year | 2023 | 50 | 14.1% | 1.23 | -7.1% | 25.8% | 1.52 | -8.6% |
-| Calendar year | 2024 | 50 | 17.0% | 1.70 | -3.6% | 23.1% | 1.62 | -5.3% |
-| Calendar year | 2025 | 50 | 6.6% | 0.59 | -12.7% | 17.7% | 0.88 | -20.2% |
-| Calendar year | 2026 | 38 | 16.4% | 2.46 | -2.4% | 31.2% | 2.80 | -3.4% |
+| Calendar year | 2017 | 49 | 13.2% | 3.23 | -1.3% | 14.3% | 3.22 | -1.4% |
+| Calendar year | 2018 | 50 | -5.1% | -0.48 | -9.5% | -4.7% | -0.28 | -14.1% |
+| Calendar year | 2019 | 51 | 14.9% | 2.42 | -3.0% | 24.0% | 2.99 | -3.4% |
+| Calendar year | 2020 | 50 | 2.6% | 0.30 | -10.9% | 13.2% | 0.62 | -24.1% |
+| Calendar year | 2021 | 51 | 10.2% | 1.61 | -2.6% | 19.4% | 1.94 | -3.4% |
+| Calendar year | 2022 | 50 | -6.9% | -0.88 | -8.7% | -9.2% | -0.52 | -14.8% |
+| Calendar year | 2023 | 50 | 10.2% | 1.29 | -5.0% | 17.6% | 1.54 | -6.3% |
+| Calendar year | 2024 | 50 | 14.2% | 2.16 | -2.6% | 18.5% | 2.03 | -3.0% |
+| Calendar year | 2025 | 50 | 9.1% | 1.07 | -8.4% | 17.3% | 1.21 | -12.8% |
+| Calendar year | 2026 | 38 | 9.2% | 1.82 | -1.8% | 17.5% | 2.07 | -3.0% |
 
 The 12% target is fixed before evaluation. Weights use only trailing volatility, five-day returns do not overlap, and 0.10% turnover cost is deducted.
 
@@ -138,6 +142,20 @@ The 12% target is fixed before evaluation. Weights use only trailing volatility,
 | Spy | 15.1% | 16.8% | 0.92 | -33.6% | 0.45 |
 
 The rule is fixed before evaluation, uses only decision-date information, rebalances every five sessions, and deducts 0.10% turnover cost.
+
+
+## Diversified Allocation Candidate: REJECTED AS A TRADING MODEL
+
+This test uses SPY, IWM, long Treasuries, high-yield credit, gold and the U.S. dollar instead of six mostly correlated equity sleeves.
+
+- Trend/inverse-volatility allocation has the best yearly Sharpe in **2 / 10** years.
+
+| Portfolio | Annual return | Volatility | Sharpe | Maximum drawdown | Calmar |
+|---|---:|---:|---:|---:|---:|
+| Trend Risk Parity | 6.1% | 7.1% | 0.87 | -8.4% | 0.73 |
+| Inverse Volatility | 6.2% | 5.3% | 1.15 | -9.0% | 0.69 |
+| Equal Weight | 7.9% | 8.3% | 0.96 | -15.3% | 0.52 |
+| Spy | 15.1% | 16.8% | 0.92 | -33.6% | 0.45 |
 
 
 ## Latest standardized coefficients

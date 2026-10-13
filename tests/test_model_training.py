@@ -169,6 +169,11 @@ class ModelTrainingTests(unittest.TestCase):
         self.assertTrue(returns["active_assets"].between(0, 6).all())
         self.assertEqual(len(summary[summary["scope"] == "Full history"]), 4)
         self.assertTrue(summary.filter(items=["sharpe", "drawdown"]).apply(np.isfinite).all().all())
+        diversified_returns, diversified_summary = multi_asset_allocation_evaluation(
+            panel, tickers=("SPY", "IWM", "XLE")
+        )
+        self.assertFalse(diversified_returns.empty)
+        self.assertEqual(len(diversified_summary[diversified_summary["scope"] == "Full history"]), 4)
 
 
 if __name__ == "__main__":

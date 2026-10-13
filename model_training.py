@@ -12,6 +12,7 @@ import pandas as pd
 import yfinance as yf
 
 TRAIN_TICKERS = ("SPY", "QQQ", "IWM", "XLK", "XLF", "XLE")
+DIVERSIFIED_TICKERS = ("SPY", "IWM", "TLT", "HYG", "GLD", "UUP")
 FEATURES = ("ret_5", "ret_21", "ma_gap", "rsi14", "vol_21", "drawdown_63")
 RISK_FEATURES = FEATURES + ("ret_63", "ma200_gap", "vol_ratio", "downside_vol_21")
 CONTEXT_TICKERS = ("TLT", "HYG", "UUP", "GLD", "^VIX")
@@ -429,14 +430,17 @@ def volatility_target_robustness(data: pd.DataFrame, target_volatility: float = 
     return pd.DataFrame(rows)
 
 
-def multi_asset_allocation_evaluation(data: pd.DataFrame, fee: float = 0.001
+def multi_asset_allocation_evaluation(data: pd.DataFrame, fee: float = 0.001,
+                                      tickers: tuple[str, ...] = TRAIN_TICKERS
                                       ) -> tuple[pd.DataFrame, pd.DataFrame]:
     """Test a fixed trend/inverse-volatility allocation without fitted parameters."""
     required = {"future_return", "vol_21", "ret_63", "ma200_gap"}
     if not required.issubset(data.columns):
         raise ValueError("Allocation audit is missing required observable features.")
-    tickers = [ticker for ticker in TRAIN_TICKERS
+    tickers = [ticker for ticker in tickers
                if ticker in data.index.get_level_values("ticker_id")]
+    if "SPY" not in tickers or len(tickers) < 2:
+        return pd.DataFrame(), pd.DataFrame()
     panels = {column: data[column].unstack("ticker_id").reindex(columns=tickers)
               for column in required}
     valid = pd.concat(panels, axis=1).dropna()
@@ -491,7 +495,8 @@ def download_dataset() -> pd.DataFrame:
             continue
         frames[ticker] = frame
     context = build_context_features(frames)
-    for ticker in TRAIN_TICKERS:
+    research_tickers = tuple(dict.fromkeys((*TRAIN_TICKERS, *DIVERSIFIED_TICKERS)))
+    for ticker in research_tickers:
         if ticker not in frames:
             continue
         frame = frames[ticker]
@@ -517,6 +522,7 @@ def render_report(results: pd.DataFrame, risk_results: pd.DataFrame,
                   regime_results: pd.DataFrame,
                   volatility_results: pd.DataFrame,
                   allocation_results: pd.DataFrame,
+                  diversified_results: pd.DataFrame,
                   coefficients: pd.Series, market_date: str) -> str:
     rows = "\n".join(f"| {name} | {value:+.4f} |" for name, value in coefficients.items())
     result_rows = "\n".join(
@@ -703,6 +709,37 @@ Insufficient aligned asset history was available.
 
 The rule is fixed before evaluation, uses only decision-date information, rebalances every five sessions, and deducts 0.10% turnover cost.
 """
+    if diversified_results.empty:
+        diversified_section = """## Diversified Allocation Candidate: NOT RUN
+
+One or more required asset classes were unavailable.
+"""
+    else:
+        full = diversified_results[diversified_results["scope"] == "Full history"]
+        yearly = diversified_results[diversified_results["scope"] == "Calendar year"]
+        candidate = full[full["strategy"] == "trend_risk_parity"].iloc[0]
+        alternatives = full[full["strategy"] != "trend_risk_parity"]
+        pivot = yearly.pivot(index="period", columns="strategy", values="sharpe")
+        year_wins = int((pivot["trend_risk_parity"] > pivot.drop(columns="trend_risk_parity").max(axis=1)).sum())
+        diversified_pass = (candidate["sharpe"] > alternatives["sharpe"].max() and
+                            candidate["annual_return"] > 0 and
+                            year_wins >= len(pivot) / 2)
+        diversified_verdict = "PASS FOR PAPER TESTING" if diversified_pass else "REJECTED AS A TRADING MODEL"
+        diversified_rows = "\n".join(
+            f"| {row.strategy.replace('_', ' ').title()} | {row.annual_return:.1%} | "
+            f"{row.volatility:.1%} | {row.sharpe:.2f} | {row.drawdown:.1%} | {row.calmar:.2f} |"
+            for row in full.itertuples(index=False)
+        )
+        diversified_section = f"""## Diversified Allocation Candidate: {diversified_verdict}
+
+This test uses SPY, IWM, long Treasuries, high-yield credit, gold and the U.S. dollar instead of six mostly correlated equity sleeves.
+
+- Trend/inverse-volatility allocation has the best yearly Sharpe in **{year_wins} / {len(pivot)}** years.
+
+| Portfolio | Annual return | Volatility | Sharpe | Maximum drawdown | Calmar |
+|---|---:|---:|---:|---:|---:|
+{diversified_rows}
+"""
     return f"""# MarketLab Model Training — {market_date}
 
 Chronological out-of-sample research result. This model does not place orders.
@@ -746,6 +783,8 @@ Chronological out-of-sample research result. This model does not place orders.
 
 {allocation_section}
 
+{diversified_section}
+
 ## Latest standardized coefficients
 
 | Feature | Coefficient |
@@ -769,8 +808,12 @@ def main() -> None:
     regime_results = pd.DataFrame()
     volatility_results = volatility_target_robustness(data)
     allocation_predictions, allocation_results = multi_asset_allocation_evaluation(data)
+    diversified_predictions, diversified_results = multi_asset_allocation_evaluation(
+        data, tickers=DIVERSIFIED_TICKERS
+    )
     coefficient_parts = []
-    available_tickers = list(data.index.get_level_values("ticker_id").unique())
+    available_tickers = [ticker for ticker in TRAIN_TICKERS
+                         if ticker in data.index.get_level_values("ticker_id")]
     for ticker in available_tickers:
         asset = data.xs(ticker, level="ticker_id").sort_index()
         evaluated, summary = chronological_evaluation(asset)
@@ -846,8 +889,14 @@ def main() -> None:
     allocation_predictions.tail(200).to_csv(
         OUTPUT_DIR / "latest_multi_asset_predictions.csv"
     )
+    diversified_results.assign(market_date=market_date).to_csv(
+        OUTPUT_DIR / "latest_diversified_allocation.csv", index=False
+    )
+    diversified_predictions.tail(200).to_csv(
+        OUTPUT_DIR / "latest_diversified_allocation_predictions.csv"
+    )
     report = render_report(results, risk_results, context_results, portfolio_result,
-                           regime_results, volatility_results, allocation_results,
+                           regime_results, volatility_results, allocation_results, diversified_results,
                            coefficients, market_date)
     (OUTPUT_DIR / "latest.md").write_text(report, encoding="utf-8")
     history = OUTPUT_DIR / "history"
