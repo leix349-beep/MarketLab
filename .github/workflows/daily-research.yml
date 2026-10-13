@@ -1,6 +1,13 @@
 name: Daily market research
 
 on:
+  push:
+    branches: [main]
+    paths:
+      - "*.py"
+      - "tests/**"
+      - "requirements.txt"
+      - ".github/workflows/daily-research.yml"
   schedule:
     # Two post-close attempts. If the first download is still stale, the
     # second run can capture the completed daily bar without duplicating files.
@@ -26,6 +33,9 @@ jobs:
 
       - name: Install dependencies
         run: pip install -r requirements.txt
+
+      - name: Run research integrity tests
+        run: python -m unittest discover -s tests -v
 
       - name: Build daily snapshot
         run: python daily_monitor.py
