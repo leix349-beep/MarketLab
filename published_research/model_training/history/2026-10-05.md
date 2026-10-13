@@ -31,6 +31,21 @@ Chronological out-of-sample research result. This model does not place orders.
 | XLF | -1.7% | 10.8% | 13.9% | 22.7% | -0.06 | 0.57 | -0.06 | 0.27 |
 | XLK | -2.9% | 25.0% | 9.1% | 25.2% | -0.27 | 1.01 | -0.14 | 0.77 |
 
+## Downside-Risk Filter Candidate: REJECTED AS A TRADING MODEL
+
+- Assets with ROC AUC above 0.52: **2 / 6**
+- Assets with higher Sharpe than buy and hold: **0 / 6**
+- Assets with smaller maximum drawdown: **3 / 6**
+
+| Asset | Risk event rate | ROC AUC | Risk recall | Exit rate | Ann. return | Model Sharpe | B&H Sharpe | Model DD | B&H DD |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| IWM | 19.8% | 0.441 | 2.6% | 6.1% | 7.0% | 0.44 | 0.66 | -28.7% | -30.4% |
+| QQQ | 19.9% | 0.549 | 17.5% | 16.4% | 9.3% | 0.61 | 0.94 | -43.1% | -35.1% |
+| SPY | 13.3% | 0.580 | 11.7% | 8.3% | 11.4% | 0.86 | 1.07 | -23.2% | -23.2% |
+| XLE | 23.6% | 0.462 | 9.0% | 9.6% | 20.3% | 0.88 | 1.05 | -22.0% | -22.5% |
+| XLF | 15.5% | 0.504 | 3.3% | 3.4% | 14.0% | 0.82 | 0.91 | -23.7% | -24.9% |
+| XLK | 21.3% | 0.497 | 12.4% | 13.9% | 9.8% | 0.56 | 1.02 | -41.4% | -31.9% |
+
 ## Latest standardized coefficients
 
 | Feature | Coefficient |

@@ -13,6 +13,7 @@ import yfinance as yf
 
 TRAIN_TICKERS = ("SPY", "QQQ", "IWM", "XLK", "XLF", "XLE")
 FEATURES = ("ret_5", "ret_21", "ma_gap", "rsi14", "vol_21", "drawdown_63")
+RISK_FEATURES = FEATURES + ("ret_63", "ma200_gap", "vol_ratio", "downside_vol_21")
 OUTPUT_DIR = Path("published_research/model_training")
 
 
@@ -48,10 +49,18 @@ def build_features(frame: pd.DataFrame, horizon: int = 5) -> pd.DataFrame:
     result["rsi14"] = rsi
     result["vol_21"] = returns.rolling(21).std() * np.sqrt(252)
     result["drawdown_63"] = close / close.rolling(63).max() - 1
+    result["ret_63"] = close.pct_change(63)
+    result["ma200_gap"] = close / close.rolling(200).mean() - 1
+    long_vol = returns.rolling(63).std() * np.sqrt(252)
+    result["vol_ratio"] = result["vol_21"] / long_vol.replace(0, np.nan)
+    result["downside_vol_21"] = returns.clip(upper=0).rolling(21).std() * np.sqrt(252)
     result["future_return"] = close.shift(-horizon) / close - 1
     result["label"] = (result["future_return"] > 0).astype(float)
-    result.loc[close.shift(-horizon).isna(), ["future_return", "label"]] = np.nan
-    return result.dropna()
+    result["risk_label"] = (result["future_return"] <= -0.02).astype(float)
+    result.loc[close.shift(-horizon).isna(), ["future_return", "label", "risk_label"]] = np.nan
+    # Keep the direction-model history unchanged when longer-horizon candidate
+    # features are added. Each candidate drops only the columns it actually uses.
+    return result.dropna(subset=list(FEATURES) + ["future_return", "label", "risk_label"])
 
 
 @dataclass
@@ -148,6 +157,72 @@ def chronological_evaluation(dataset: pd.DataFrame, min_train: int = 756,
     return evaluated, summary
 
 
+def roc_auc(y: pd.Series, score: pd.Series) -> float:
+    """Rank-based ROC AUC without an additional machine-learning dependency."""
+    y = y.astype(int)
+    positives = int(y.sum())
+    negatives = len(y) - positives
+    if positives == 0 or negatives == 0:
+        return 0.5
+    ranks = score.rank(method="average")
+    return float((ranks[y == 1].sum() - positives * (positives + 1) / 2) / (positives * negatives))
+
+
+def downside_risk_evaluation(dataset: pd.DataFrame, min_train: int = 756,
+                             retrain_every: int = 63, embargo_days: int = 5,
+                             minimum_risk_probability: float = 0.20,
+                             risk_margin: float = 0.05, fee: float = 0.001) -> tuple[pd.DataFrame, dict]:
+    """Test a candidate filter that exits when five-day downside risk is elevated."""
+    data = dataset.sort_index().dropna(subset=list(RISK_FEATURES) + ["future_return", "risk_label"]).copy()
+    if len(data) < min_train + retrain_every:
+        raise ValueError("Not enough observations for downside-risk evaluation.")
+    probabilities = pd.Series(np.nan, index=data.index, dtype=float)
+    thresholds = pd.Series(np.nan, index=data.index, dtype=float)
+    for start in range(min_train, len(data), retrain_every):
+        end = min(start + retrain_every, len(data))
+        train = data.iloc[:start - embargo_days]
+        model = fit_logistic(train[list(RISK_FEATURES)].to_numpy(), train["risk_label"].to_numpy())
+        probabilities.iloc[start:end] = model.predict_proba(data.iloc[start:end][list(RISK_FEATURES)].to_numpy())
+        thresholds.iloc[start:end] = max(minimum_risk_probability,
+                                         float(train["risk_label"].mean()) + risk_margin)
+    evaluated = data.loc[probabilities.notna()].copy()
+    evaluated["risk_probability"] = probabilities.dropna()
+    evaluated["risk_threshold"] = thresholds.dropna()
+    evaluated["risk_signal"] = (evaluated["risk_probability"] >= evaluated["risk_threshold"]).astype(int)
+    evaluated["position"] = 1.0 - evaluated["risk_signal"]
+    active_risk = evaluated["risk_label"] == 1
+    predicted_risk = evaluated["risk_signal"] == 1
+    recall = float(evaluated.loc[active_risk, "risk_signal"].mean()) if active_risk.any() else 0.0
+    precision = float(evaluated.loc[predicted_risk, "risk_label"].mean()) if predicted_risk.any() else 0.0
+    sampled = evaluated.iloc[::5].copy()
+    turnover = sampled["position"].diff().abs().fillna(1 - sampled["position"])
+    sampled["strategy_return_net"] = sampled["position"] * sampled["future_return"] - turnover * fee
+    strategy = performance_metrics(sampled["strategy_return_net"])
+    benchmark = performance_metrics(sampled["future_return"])
+    summary = {
+        "observations": int(len(evaluated)),
+        "risk_event_rate": float(evaluated["risk_label"].mean()),
+        "roc_auc": roc_auc(evaluated["risk_label"], evaluated["risk_probability"]),
+        "risk_recall": recall,
+        "risk_precision": precision,
+        "exit_rate": float(predicted_risk.mean()),
+        "strategy_return": strategy["return"],
+        "strategy_annual_return": strategy["annual_return"],
+        "strategy_volatility": strategy["volatility"],
+        "strategy_sharpe": strategy["sharpe"],
+        "maximum_drawdown": strategy["drawdown"],
+        "strategy_calmar": strategy["calmar"],
+        "benchmark_return": benchmark["return"],
+        "benchmark_annual_return": benchmark["annual_return"],
+        "benchmark_volatility": benchmark["volatility"],
+        "benchmark_sharpe": benchmark["sharpe"],
+        "benchmark_drawdown": benchmark["drawdown"],
+        "benchmark_calmar": benchmark["calmar"],
+        "fee": fee,
+    }
+    return evaluated, summary
+
+
 def download_dataset() -> pd.DataFrame:
     parts = []
     for ticker in TRAIN_TICKERS:
@@ -171,7 +246,8 @@ def download_dataset() -> pd.DataFrame:
     return pd.concat(parts).sort_index()
 
 
-def render_report(results: pd.DataFrame, coefficients: pd.Series, market_date: str) -> str:
+def render_report(results: pd.DataFrame, risk_results: pd.DataFrame,
+                  coefficients: pd.Series, market_date: str) -> str:
     rows = "\n".join(f"| {name} | {value:+.4f} |" for name, value in coefficients.items())
     result_rows = "\n".join(
         f"| {row.ticker} | {row.observations:,} | {row.accuracy:.1%} | {row.accuracy_edge:+.1%} | "
@@ -190,6 +266,19 @@ def render_report(results: pd.DataFrame, coefficients: pd.Series, market_date: s
         f"{row.benchmark_sharpe:.2f} | {row.strategy_calmar:.2f} | {row.benchmark_calmar:.2f} |"
         for row in results.itertuples(index=False)
     )
+    filter_rows = "\n".join(
+        f"| {row.ticker} | {row.risk_event_rate:.1%} | {row.roc_auc:.3f} | {row.risk_recall:.1%} | "
+        f"{row.exit_rate:.1%} | {row.strategy_annual_return:.1%} | {row.strategy_sharpe:.2f} | "
+        f"{row.benchmark_sharpe:.2f} | {row.maximum_drawdown:.1%} | {row.benchmark_drawdown:.1%} |"
+        for row in risk_results.itertuples(index=False)
+    )
+    informative_filters = int((risk_results["roc_auc"] > 0.52).sum())
+    better_sharpe_filters = int((risk_results["strategy_sharpe"] > risk_results["benchmark_sharpe"]).sum())
+    lower_drawdown_filters = int((risk_results["maximum_drawdown"] > risk_results["benchmark_drawdown"]).sum())
+    filter_pass = (informative_filters >= len(risk_results) / 2 and
+                   better_sharpe_filters >= len(risk_results) / 2 and
+                   lower_drawdown_filters >= len(risk_results) / 2)
+    filter_verdict = "PASS FOR FURTHER PAPER TESTING" if filter_pass else "REJECTED AS A TRADING MODEL"
     return f"""# MarketLab Model Training — {market_date}
 
 Chronological out-of-sample research result. This model does not place orders.
@@ -213,6 +302,16 @@ Chronological out-of-sample research result. This model does not place orders.
 |---|---:|---:|---:|---:|---:|---:|---:|---:|
 {risk_rows}
 
+## Downside-Risk Filter Candidate: {filter_verdict}
+
+- Assets with ROC AUC above 0.52: **{informative_filters} / {len(risk_results)}**
+- Assets with higher Sharpe than buy and hold: **{better_sharpe_filters} / {len(risk_results)}**
+- Assets with smaller maximum drawdown: **{lower_drawdown_filters} / {len(risk_results)}**
+
+| Asset | Risk event rate | ROC AUC | Risk recall | Exit rate | Ann. return | Model Sharpe | B&H Sharpe | Model DD | B&H DD |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+{filter_rows}
+
 ## Latest standardized coefficients
 
 | Feature | Coefficient |
@@ -227,6 +326,8 @@ def main() -> None:
     data = download_dataset()
     result_rows = []
     prediction_parts = []
+    risk_result_rows = []
+    risk_prediction_parts = []
     coefficient_parts = []
     available_tickers = list(data.index.get_level_values("ticker_id").unique())
     for ticker in available_tickers:
@@ -237,6 +338,12 @@ def main() -> None:
         evaluated = evaluated.copy()
         evaluated["ticker"] = ticker
         prediction_parts.append(evaluated.reset_index())
+        risk_evaluated, risk_summary = downside_risk_evaluation(asset)
+        risk_summary["ticker"] = ticker
+        risk_result_rows.append(risk_summary)
+        risk_evaluated = risk_evaluated.copy()
+        risk_evaluated["ticker"] = ticker
+        risk_prediction_parts.append(risk_evaluated.reset_index())
         model = fit_logistic(asset[list(FEATURES)].to_numpy(), asset["label"].to_numpy())
         coefficient_parts.append(pd.Series(model.weights[:-1], index=FEATURES, name=ticker))
     results = pd.DataFrame(result_rows)[["ticker", "observations", "accuracy", "naive_accuracy",
@@ -248,13 +355,18 @@ def main() -> None:
                                          "benchmark_calmar", "threshold", "average_decision_threshold",
                                          "minimum_edge", "fee"]]
     coefficients = pd.concat(coefficient_parts, axis=1).mean(axis=1)
+    risk_results = pd.DataFrame(risk_result_rows)
     market_date = pd.Timestamp(data.index.get_level_values("date").max()).date().isoformat()
     OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
     results.assign(market_date=market_date).to_csv(OUTPUT_DIR / "latest.csv", index=False)
     pd.concat(prediction_parts).sort_values(["date", "ticker"]).groupby("ticker").tail(100).to_csv(
         OUTPUT_DIR / "latest_predictions.csv", index=False
     )
-    report = render_report(results, coefficients, market_date)
+    risk_results.assign(market_date=market_date).to_csv(OUTPUT_DIR / "latest_risk.csv", index=False)
+    pd.concat(risk_prediction_parts).sort_values(["date", "ticker"]).groupby("ticker").tail(100).to_csv(
+        OUTPUT_DIR / "latest_risk_predictions.csv", index=False
+    )
+    report = render_report(results, risk_results, coefficients, market_date)
     (OUTPUT_DIR / "latest.md").write_text(report, encoding="utf-8")
     history = OUTPUT_DIR / "history"
     history.mkdir(exist_ok=True)
