@@ -1,7 +1,8 @@
 import unittest
 import numpy as np
 import pandas as pd
-from model_training import FEATURES, build_features, chronological_evaluation
+from unittest.mock import patch
+from model_training import FEATURES, build_features, chronological_evaluation, download_dataset
 
 
 class ModelTrainingTests(unittest.TestCase):
@@ -22,6 +23,14 @@ class ModelTrainingTests(unittest.TestCase):
         self.assertEqual(result.index.min(), index[600])
         self.assertEqual(summary["observations"], 600)
         self.assertTrue(0 <= summary["accuracy"] <= 1)
+        self.assertTrue(0 <= summary["balanced_accuracy"] <= 1)
+        self.assertTrue(0 <= summary["brier_score"] <= 1)
+        self.assertTrue((result["decision_threshold"] >= 0.55).all())
+
+    @patch("model_training.yf.download", return_value=pd.DataFrame())
+    def test_download_fails_cleanly_when_provider_is_empty(self, _download):
+        with self.assertRaisesRegex(RuntimeError, "No training data"):
+            download_dataset()
 
 
 if __name__ == "__main__":

@@ -65,12 +65,14 @@ def fit_logistic(x: np.ndarray, y: np.ndarray, iterations: int = 800,
 
 def chronological_evaluation(dataset: pd.DataFrame, min_train: int = 756,
                              retrain_every: int = 63, threshold: float = 0.55,
-                             embargo_days: int = 5, fee: float = 0.001) -> tuple[pd.DataFrame, dict]:
+                             embargo_days: int = 5, fee: float = 0.001,
+                             minimum_edge: float = 0.03) -> tuple[pd.DataFrame, dict]:
     """Expanding-window predictions; test rows are never used before prediction."""
     data = dataset.sort_index().copy()
     if len(data) < min_train + retrain_every:
         raise ValueError("Not enough observations for chronological evaluation.")
     probabilities = pd.Series(np.nan, index=data.index, dtype=float)
+    decision_thresholds = pd.Series(np.nan, index=data.index, dtype=float)
     for start in range(min_train, len(data), retrain_every):
         end = min(start + retrain_every, len(data))
         # Labels use the next five sessions. Excluding the final training rows
@@ -78,10 +80,15 @@ def chronological_evaluation(dataset: pd.DataFrame, min_train: int = 756,
         train = data.iloc[:start - embargo_days]
         model = fit_logistic(train[list(FEATURES)].to_numpy(), train["label"].to_numpy())
         probabilities.iloc[start:end] = model.predict_proba(data.iloc[start:end][list(FEATURES)].to_numpy())
+        # A fixed 55% threshold can mean permanent exposure in assets that rise
+        # more than 55% of the time. Require an edge over the observed training
+        # base rate so the model must add information beyond "always bullish".
+        decision_thresholds.iloc[start:end] = max(threshold, float(train["label"].mean()) + minimum_edge)
     evaluated = data.loc[probabilities.notna()].copy()
     evaluated["probability"] = probabilities.dropna()
     evaluated["prediction"] = (evaluated["probability"] >= 0.5).astype(int)
-    evaluated["position"] = (evaluated["probability"] >= threshold).astype(float)
+    evaluated["decision_threshold"] = decision_thresholds.dropna()
+    evaluated["position"] = (evaluated["probability"] >= evaluated["decision_threshold"]).astype(float)
     evaluated["strategy_return"] = evaluated["position"] * evaluated["future_return"]
     active = evaluated[evaluated["position"] > 0]
     sampled = evaluated.iloc[::5]
@@ -91,15 +98,27 @@ def chronological_evaluation(dataset: pd.DataFrame, min_train: int = 756,
     strategy_wealth = (1 + sampled["strategy_return_net"]).cumprod()
     benchmark_wealth = (1 + sampled["future_return"]).cumprod()
     drawdown = strategy_wealth / strategy_wealth.cummax() - 1
+    positives = evaluated["label"] == 1
+    negatives = ~positives
+    sensitivity = float((evaluated.loc[positives, "prediction"] == 1).mean()) if positives.any() else 0.0
+    specificity = float((evaluated.loc[negatives, "prediction"] == 0).mean()) if negatives.any() else 0.0
+    base_rate = float(evaluated["label"].mean())
+    naive_accuracy = max(base_rate, 1 - base_rate)
     summary = {
         "observations": int(len(evaluated)),
         "accuracy": float((evaluated["prediction"] == evaluated["label"]).mean()),
+        "naive_accuracy": naive_accuracy,
+        "accuracy_edge": float((evaluated["prediction"] == evaluated["label"]).mean()) - naive_accuracy,
+        "balanced_accuracy": (sensitivity + specificity) / 2,
+        "brier_score": float(((evaluated["probability"] - evaluated["label"]) ** 2).mean()),
         "signal_rate": float(evaluated["position"].mean()),
         "signal_win_rate": float((active["future_return"] > 0).mean()) if len(active) else 0.0,
         "strategy_return": float(strategy_wealth.iloc[-1] - 1),
         "benchmark_return": float(benchmark_wealth.iloc[-1] - 1),
         "maximum_drawdown": float(drawdown.min()),
         "threshold": threshold,
+        "average_decision_threshold": float(evaluated["decision_threshold"].mean()),
+        "minimum_edge": minimum_edge,
         "fee": fee,
     }
     return evaluated, summary
@@ -111,7 +130,13 @@ def download_dataset() -> pd.DataFrame:
         frame = yf.download(ticker, period="10y", auto_adjust=True, progress=False)
         if isinstance(frame.columns, pd.MultiIndex):
             frame.columns = frame.columns.get_level_values(0)
+        if frame.empty or "Close" not in frame:
+            print(f"Skipping {ticker}: no usable training history")
+            continue
         features = build_features(frame)
+        if features.empty:
+            print(f"Skipping {ticker}: insufficient feature history")
+            continue
         features["ticker"] = ticker
         features.index = pd.MultiIndex.from_arrays(
             [features.index, np.repeat(ticker, len(features))], names=["date", "ticker_id"]
@@ -125,18 +150,29 @@ def download_dataset() -> pd.DataFrame:
 def render_report(results: pd.DataFrame, coefficients: pd.Series, market_date: str) -> str:
     rows = "\n".join(f"| {name} | {value:+.4f} |" for name, value in coefficients.items())
     result_rows = "\n".join(
-        f"| {row.ticker} | {row.observations:,} | {row.accuracy:.1%} | {row.signal_rate:.1%} | "
+        f"| {row.ticker} | {row.observations:,} | {row.accuracy:.1%} | {row.accuracy_edge:+.1%} | "
+        f"{row.balanced_accuracy:.1%} | {row.signal_rate:.1%} | "
         f"{row.signal_win_rate:.1%} | {row.strategy_return:.1%} | {row.benchmark_return:.1%} | "
         f"{row.maximum_drawdown:.1%} |" for row in results.itertuples(index=False)
     )
+    predictive_assets = int(((results["accuracy_edge"] > 0) & (results["balanced_accuracy"] > 0.5)).sum())
+    outperforming_assets = int((results["strategy_return"] > results["benchmark_return"]).sum())
+    accepted = predictive_assets >= len(results) / 2 and outperforming_assets >= len(results) / 2
+    verdict = "PASS FOR FURTHER PAPER TESTING" if accepted else "REJECTED AS A TRADING MODEL"
     return f"""# MarketLab Model Training — {market_date}
 
 Chronological out-of-sample research result. This model does not place orders.
 
+## Verdict: {verdict}
+
+- Assets with predictive improvement over the naive baseline: **{predictive_assets} / {len(results)}**
+- Assets outperforming buy and hold: **{outperforming_assets} / {len(results)}**
+- A rejected model remains a recorded baseline; it must not generate a live-trading recommendation.
+
 ## Test Result by Asset
 
-| Asset | OOS rows | Accuracy | Exposure | Signal win rate | Model return | Buy & hold | Max drawdown |
-|---|---:|---:|---:|---:|---:|---:|---:|
+| Asset | OOS rows | Accuracy | Edge vs naive | Balanced acc. | Exposure | Signal win rate | Model return | Buy & hold | Max drawdown |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|
 {result_rows}
 
 ## Latest standardized coefficients
@@ -145,7 +181,7 @@ Chronological out-of-sample research result. This model does not place orders.
 |---|---:|
 {rows}
 
-Each asset is trained and tested independently with a regularized logistic regression. The model is refit every 63 trading days, separated from each test block by a five-day embargo, and requires a probability of at least {results.iloc[0]['threshold']:.0%} for exposure. Returns use non-overlapping five-day samples and deduct {results.iloc[0]['fee']:.2%} when exposure changes. They remain historical research rather than evidence of future profit.
+Each asset is trained and tested independently with a regularized logistic regression. The model is refit every 63 trading days and separated from each test block by a five-day embargo. Exposure requires at least {results.iloc[0]['threshold']:.0%} probability and a {results.iloc[0]['minimum_edge']:.0%} edge over the training-period base rate. Returns use non-overlapping five-day samples and deduct {results.iloc[0]['fee']:.2%} when exposure changes. They remain historical research rather than evidence of future profit.
 """
 
 
@@ -154,7 +190,8 @@ def main() -> None:
     result_rows = []
     prediction_parts = []
     coefficient_parts = []
-    for ticker in TRAIN_TICKERS:
+    available_tickers = list(data.index.get_level_values("ticker_id").unique())
+    for ticker in available_tickers:
         asset = data.xs(ticker, level="ticker_id").sort_index()
         evaluated, summary = chronological_evaluation(asset)
         summary["ticker"] = ticker
@@ -164,9 +201,11 @@ def main() -> None:
         prediction_parts.append(evaluated.reset_index())
         model = fit_logistic(asset[list(FEATURES)].to_numpy(), asset["label"].to_numpy())
         coefficient_parts.append(pd.Series(model.weights[:-1], index=FEATURES, name=ticker))
-    results = pd.DataFrame(result_rows)[["ticker", "observations", "accuracy", "signal_rate",
+    results = pd.DataFrame(result_rows)[["ticker", "observations", "accuracy", "naive_accuracy",
+                                         "accuracy_edge", "balanced_accuracy", "brier_score", "signal_rate",
                                          "signal_win_rate", "strategy_return", "benchmark_return",
-                                         "maximum_drawdown", "threshold", "fee"]]
+                                         "maximum_drawdown", "threshold", "average_decision_threshold",
+                                         "minimum_edge", "fee"]]
     coefficients = pd.concat(coefficient_parts, axis=1).mean(axis=1)
     market_date = pd.Timestamp(data.index.get_level_values("date").max()).date().isoformat()
     OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
