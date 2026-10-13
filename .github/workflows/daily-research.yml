@@ -44,6 +44,7 @@ jobs:
         run: python model_training.py
 
       - name: Commit new observation
+        if: github.event_name != 'push'
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
