@@ -304,30 +304,38 @@ def portfolio_regime_evaluation(evaluated: pd.DataFrame, target_volatility: floa
     The comparison separates the contribution of ordinary volatility targeting
     from the incremental contribution of the learned cross-asset risk signal.
     """
-    required = {"vol_21", "future_return", "risk_signal"}
+    required = {"vol_21", "future_return", "risk_signal", "risk_probability", "risk_threshold"}
     if not required.issubset(evaluated.columns):
         raise ValueError("Portfolio evaluation is missing required validated columns.")
     sampled = evaluated.sort_index().iloc[::5].copy()
     sampled["vol_target_weight"] = (target_volatility / sampled["vol_21"]).clip(0, 1).fillna(0)
     multiplier = np.where(sampled["risk_signal"] == 1, defensive_weight, 1.0)
     sampled["model_weight"] = sampled["vol_target_weight"] * multiplier
+    risk_intensity = ((sampled["risk_probability"] - 0.5 * sampled["risk_threshold"]) /
+                      sampled["risk_threshold"].replace(0, np.nan)).clip(0, 1).fillna(0)
+    sampled["smooth_weight"] = sampled["vol_target_weight"] * (1 - (1 - defensive_weight) * risk_intensity)
     vol_turnover = sampled["vol_target_weight"].diff().abs().fillna(sampled["vol_target_weight"])
     model_turnover = sampled["model_weight"].diff().abs().fillna(sampled["model_weight"])
+    smooth_turnover = sampled["smooth_weight"].diff().abs().fillna(sampled["smooth_weight"])
     sampled["buy_hold_return"] = sampled["future_return"]
     sampled["vol_target_return"] = (sampled["vol_target_weight"] * sampled["future_return"] -
                                      vol_turnover * fee)
     sampled["model_return"] = sampled["model_weight"] * sampled["future_return"] - model_turnover * fee
+    sampled["smooth_return"] = sampled["smooth_weight"] * sampled["future_return"] - smooth_turnover * fee
     buy_hold = performance_metrics(sampled["buy_hold_return"])
     vol_target = performance_metrics(sampled["vol_target_return"])
     model = performance_metrics(sampled["model_return"])
+    smooth = performance_metrics(sampled["smooth_return"])
     summary = {
         "target_volatility": target_volatility,
         "defensive_weight": defensive_weight,
         "fee": fee,
         "average_model_weight": float(sampled["model_weight"].mean()),
+        "average_smooth_weight": float(sampled["smooth_weight"].mean()),
         "average_vol_target_weight": float(sampled["vol_target_weight"].mean()),
     }
-    for prefix, stats in (("model", model), ("vol_target", vol_target), ("buy_hold", buy_hold)):
+    for prefix, stats in (("smooth", smooth), ("model", model),
+                          ("vol_target", vol_target), ("buy_hold", buy_hold)):
         for key, value in stats.items():
             summary[f"{prefix}_{key}"] = value
     return sampled, summary
@@ -335,7 +343,7 @@ def portfolio_regime_evaluation(evaluated: pd.DataFrame, target_volatility: floa
 
 def regime_stability_evaluation(portfolio: pd.DataFrame) -> pd.DataFrame:
     """Measure conditional performance using states observable at each decision date."""
-    required = {"market_ma_gap", "vix_level", "vol_21", "model_return",
+    required = {"market_ma_gap", "vix_level", "vol_21", "model_return", "smooth_return",
                 "vol_target_return", "buy_hold_return"}
     if not required.issubset(portfolio.columns):
         raise ValueError("Regime audit is missing required portfolio or context columns.")
@@ -364,7 +372,8 @@ def regime_stability_evaluation(portfolio: pd.DataFrame) -> pd.DataFrame:
             if len(subset) < 20:
                 continue
             row = {"dimension": dimension, "state": state, "observations": int(len(subset))}
-            for name, column in (("model", "model_return"), ("vol_target", "vol_target_return"),
+            for name, column in (("smooth", "smooth_return"), ("model", "model_return"),
+                                 ("vol_target", "vol_target_return"),
                                  ("buy_hold", "buy_hold_return")):
                 stats = performance_metrics(subset[column])
                 row[f"{name}_annual_return"] = stats["annual_return"]
@@ -481,10 +490,10 @@ The validated SPY context series was unavailable; no partial portfolio result wa
 """
     else:
         portfolio_pass = (
-            portfolio_result["model_sharpe"] > portfolio_result["vol_target_sharpe"] and
-            portfolio_result["model_sharpe"] > portfolio_result["buy_hold_sharpe"] and
-            portfolio_result["model_drawdown"] > portfolio_result["vol_target_drawdown"] and
-            portfolio_result["model_annual_return"] > 0
+            portfolio_result["smooth_sharpe"] > portfolio_result["vol_target_sharpe"] and
+            portfolio_result["smooth_sharpe"] > portfolio_result["buy_hold_sharpe"] and
+            portfolio_result["smooth_drawdown"] > portfolio_result["vol_target_drawdown"] and
+            portfolio_result["smooth_annual_return"] > 0
         )
         portfolio_verdict = "PASS FOR FURTHER PAPER TESTING" if portfolio_pass else "REJECTED AS A TRADING MODEL"
         portfolio_section = f"""## Portfolio Regime Candidate: {portfolio_verdict}
@@ -493,11 +502,13 @@ The learned risk signal controls exposure on top of a fixed {portfolio_result['t
 
 | Portfolio | Annual return | Volatility | Sharpe | Maximum drawdown | Calmar |
 |---|---:|---:|---:|---:|---:|
-| ML risk allocation | {portfolio_result['model_annual_return']:.1%} | {portfolio_result['model_volatility']:.1%} | {portfolio_result['model_sharpe']:.2f} | {portfolio_result['model_drawdown']:.1%} | {portfolio_result['model_calmar']:.2f} |
+| ML smooth allocation | {portfolio_result['smooth_annual_return']:.1%} | {portfolio_result['smooth_volatility']:.1%} | {portfolio_result['smooth_sharpe']:.2f} | {portfolio_result['smooth_drawdown']:.1%} | {portfolio_result['smooth_calmar']:.2f} |
+| ML binary allocation | {portfolio_result['model_annual_return']:.1%} | {portfolio_result['model_volatility']:.1%} | {portfolio_result['model_sharpe']:.2f} | {portfolio_result['model_drawdown']:.1%} | {portfolio_result['model_calmar']:.2f} |
 | Volatility target only | {portfolio_result['vol_target_annual_return']:.1%} | {portfolio_result['vol_target_volatility']:.1%} | {portfolio_result['vol_target_sharpe']:.2f} | {portfolio_result['vol_target_drawdown']:.1%} | {portfolio_result['vol_target_calmar']:.2f} |
 | Buy and hold | {portfolio_result['buy_hold_annual_return']:.1%} | {portfolio_result['buy_hold_volatility']:.1%} | {portfolio_result['buy_hold_sharpe']:.2f} | {portfolio_result['buy_hold_drawdown']:.1%} | {portfolio_result['buy_hold_calmar']:.2f} |
 
-- Average ML exposure: **{portfolio_result['average_model_weight']:.1%}**
+- Average smooth ML exposure: **{portfolio_result['average_smooth_weight']:.1%}**
+- Average binary ML exposure: **{portfolio_result['average_model_weight']:.1%}**
 - Average volatility-target exposure: **{portfolio_result['average_vol_target_weight']:.1%}**
 """
     if regime_results.empty:
@@ -508,19 +519,19 @@ Insufficient validated portfolio observations were available.
     else:
         regime_rows = "\n".join(
             f"| {row.dimension} | {row.state} | {row.observations} | "
-            f"{row.model_annual_return:.1%} | {row.model_sharpe:.2f} | "
+            f"{row.smooth_annual_return:.1%} | {row.smooth_sharpe:.2f} | "
             f"{row.vol_target_annual_return:.1%} | {row.vol_target_sharpe:.2f} | "
             f"{row.buy_hold_annual_return:.1%} | {row.buy_hold_sharpe:.2f} |"
             for row in regime_results.itertuples(index=False)
         )
         vol_wins = int((regime_results["vol_target_sharpe"] > regime_results["buy_hold_sharpe"]).sum())
-        ml_wins = int((regime_results["model_sharpe"] > regime_results["vol_target_sharpe"]).sum())
+        ml_wins = int((regime_results["smooth_sharpe"] > regime_results["vol_target_sharpe"]).sum())
         stability_section = f"""## Observable-Regime Stability Audit
 
 - Volatility target beats buy and hold on Sharpe in **{vol_wins} / {len(regime_results)}** observable states.
-- ML allocation beats volatility target on Sharpe in **{ml_wins} / {len(regime_results)}** observable states.
+- Smooth ML allocation beats volatility target on Sharpe in **{ml_wins} / {len(regime_results)}** observable states.
 
-| Dimension | State | Observations | ML ann. return | ML Sharpe | Vol-target ann. return | Vol-target Sharpe | B&H ann. return | B&H Sharpe |
+| Dimension | State | Observations | Smooth ML ann. return | Smooth ML Sharpe | Vol-target ann. return | Vol-target Sharpe | B&H ann. return | B&H Sharpe |
 |---|---|---:|---:|---:|---:|---:|---:|---:|
 {regime_rows}
 

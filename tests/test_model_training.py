@@ -105,10 +105,14 @@ class ModelTrainingTests(unittest.TestCase):
             "vol_21": np.linspace(0.08, 0.30, len(index)),
             "future_return": np.sin(np.arange(len(index)) / 20) * 0.02,
             "risk_signal": (np.arange(len(index)) % 11 == 0).astype(int),
+            "risk_probability": 0.15 + (np.arange(len(index)) % 20) / 100,
+            "risk_threshold": 0.25,
         }, index=index)
         sampled, summary = portfolio_regime_evaluation(evaluated)
         self.assertTrue(sampled["model_weight"].between(0, 1).all())
+        self.assertTrue(sampled["smooth_weight"].between(0, 1).all())
         self.assertTrue((sampled["model_weight"] <= sampled["vol_target_weight"]).all())
+        self.assertTrue((sampled["smooth_weight"] <= sampled["vol_target_weight"]).all())
         self.assertTrue(all(np.isfinite(value) for value in summary.values()))
 
     def test_regime_audit_uses_observable_states(self):
@@ -118,6 +122,7 @@ class ModelTrainingTests(unittest.TestCase):
             "vix_level": np.where(np.arange(len(index)) % 7 == 0, 0.30, 0.18),
             "vol_21": np.linspace(0.08, 0.30, len(index)),
             "model_return": 0.001,
+            "smooth_return": 0.0009,
             "vol_target_return": 0.0008,
             "buy_hold_return": 0.0012,
         }, index=index)
