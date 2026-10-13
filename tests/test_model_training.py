@@ -4,7 +4,7 @@ import pandas as pd
 from unittest.mock import patch
 from model_training import (CONTEXT_FEATURES, FEATURES, RISK_FEATURES, build_context_features,
                             build_features, chronological_evaluation, downside_risk_evaluation,
-                            download_dataset, performance_metrics, roc_auc)
+                            download_dataset, performance_metrics, roc_auc, select_risk_threshold)
 
 
 class ModelTrainingTests(unittest.TestCase):
@@ -66,6 +66,37 @@ class ModelTrainingTests(unittest.TestCase):
         self.assertFalse(context.empty)
         self.assertTrue(context[list(CONTEXT_FEATURES)].notna().all().all())
         self.assertTrue(context["breadth_above_ma60"].between(0, 1).all())
+
+    def test_nested_threshold_does_not_look_at_outer_test_labels(self):
+        rng = np.random.default_rng(12)
+        index = pd.bdate_range("2014-01-01", periods=1200)
+        data = pd.DataFrame(rng.normal(size=(len(index), len(RISK_FEATURES))), index=index,
+                            columns=RISK_FEATURES)
+        data["future_return"] = rng.normal(0.001, 0.025, len(index))
+        data["risk_label"] = (data["future_return"] <= -0.02).astype(float)
+        first, _ = downside_risk_evaluation(data, min_train=600, retrain_every=100,
+                                             nested_threshold=True)
+        changed = data.copy()
+        changed.iloc[600:, changed.columns.get_loc("future_return")] *= -1
+        changed.iloc[600:, changed.columns.get_loc("risk_label")] = 1 - changed.iloc[600:]["risk_label"]
+        second, _ = downside_risk_evaluation(changed, min_train=600, retrain_every=100,
+                                              nested_threshold=True)
+        pd.testing.assert_series_equal(first["risk_threshold"].iloc[:100],
+                                       second["risk_threshold"].iloc[:100])
+        pd.testing.assert_series_equal(first["risk_probability"].iloc[:100],
+                                       second["risk_probability"].iloc[:100])
+
+    def test_threshold_selector_can_choose_no_filter(self):
+        rng = np.random.default_rng(13)
+        index = pd.bdate_range("2015-01-01", periods=900)
+        train = pd.DataFrame(rng.normal(size=(len(index), len(RISK_FEATURES))), index=index,
+                             columns=RISK_FEATURES)
+        train["future_return"] = 0.002
+        train["risk_label"] = 0.0
+        # Add both classes so logistic fitting is meaningful while remaining invested is optimal.
+        train.loc[train.index[::20], "risk_label"] = 1.0
+        threshold = select_risk_threshold(train, RISK_FEATURES)
+        self.assertIn(threshold, [float(value) for value in np.arange(0.10, 0.51, 0.05)] + [1.0])
 
 
 if __name__ == "__main__":

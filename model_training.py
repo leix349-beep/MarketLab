@@ -203,11 +203,42 @@ def roc_auc(y: pd.Series, score: pd.Series) -> float:
     return float((ranks[y == 1].sum() - positives * (positives + 1) / 2) / (positives * negatives))
 
 
+def select_risk_threshold(train: pd.DataFrame, feature_names: tuple[str, ...],
+                          embargo_days: int = 5, fee: float = 0.001) -> float:
+    """Choose an execution threshold inside training data only.
+
+    The final 20% of the outer training window acts as an inner validation set.
+    A value of 1.0 is an explicit no-filter fallback (remain invested).
+    """
+    validation_size = max(126, int(len(train) * 0.20))
+    split = len(train) - validation_size
+    if split - embargo_days < 252:
+        return 1.0
+    inner_train = train.iloc[:split - embargo_days]
+    validation = train.iloc[split:]
+    model = fit_logistic(inner_train[list(feature_names)].to_numpy(), inner_train["risk_label"].to_numpy())
+    probabilities = model.predict_proba(validation[list(feature_names)].to_numpy())
+    candidates = [float(value) for value in np.arange(0.10, 0.51, 0.05)] + [1.0]
+    best_threshold, best_score = 1.0, -np.inf
+    for candidate in candidates:
+        position = pd.Series((probabilities < candidate).astype(float), index=validation.index)
+        sampled = validation.assign(position=position).iloc[::5].copy()
+        turnover = sampled["position"].diff().abs().fillna(1 - sampled["position"])
+        net_return = sampled["position"] * sampled["future_return"] - turnover * fee
+        stats = performance_metrics(net_return)
+        # Sharpe is primary; Calmar breaks near-ties toward smaller drawdowns.
+        score = stats["sharpe"] + 0.01 * stats["calmar"]
+        if score > best_score:
+            best_threshold, best_score = candidate, score
+    return best_threshold
+
+
 def downside_risk_evaluation(dataset: pd.DataFrame, min_train: int = 756,
                              retrain_every: int = 63, embargo_days: int = 5,
                              minimum_risk_probability: float = 0.20,
                              risk_margin: float = 0.05, fee: float = 0.001,
-                             feature_names: tuple[str, ...] = RISK_FEATURES) -> tuple[pd.DataFrame, dict]:
+                             feature_names: tuple[str, ...] = RISK_FEATURES,
+                             nested_threshold: bool = False) -> tuple[pd.DataFrame, dict]:
     """Test a candidate filter that exits when five-day downside risk is elevated."""
     data = dataset.sort_index().dropna(subset=list(feature_names) + ["future_return", "risk_label"]).copy()
     if len(data) < min_train + retrain_every:
@@ -219,8 +250,12 @@ def downside_risk_evaluation(dataset: pd.DataFrame, min_train: int = 756,
         train = data.iloc[:start - embargo_days]
         model = fit_logistic(train[list(feature_names)].to_numpy(), train["risk_label"].to_numpy())
         probabilities.iloc[start:end] = model.predict_proba(data.iloc[start:end][list(feature_names)].to_numpy())
-        thresholds.iloc[start:end] = max(minimum_risk_probability,
-                                         float(train["risk_label"].mean()) + risk_margin)
+        if nested_threshold:
+            chosen_threshold = select_risk_threshold(train, feature_names, embargo_days, fee)
+        else:
+            chosen_threshold = max(minimum_risk_probability,
+                                   float(train["risk_label"].mean()) + risk_margin)
+        thresholds.iloc[start:end] = chosen_threshold
     evaluated = data.loc[probabilities.notna()].copy()
     evaluated["risk_probability"] = probabilities.dropna()
     evaluated["risk_threshold"] = thresholds.dropna()
@@ -242,6 +277,8 @@ def downside_risk_evaluation(dataset: pd.DataFrame, min_train: int = 756,
         "risk_recall": recall,
         "risk_precision": precision,
         "exit_rate": float(predicted_risk.mean()),
+        "average_risk_threshold": float(evaluated["risk_threshold"].mean()),
+        "fallback_rate": float((evaluated["risk_threshold"] == 1.0).mean()),
         "strategy_return": strategy["return"],
         "strategy_annual_return": strategy["annual_return"],
         "strategy_volatility": strategy["volatility"],
@@ -333,6 +370,7 @@ One or more required context series were unavailable, so no stale or partial res
     else:
         context_rows = "\n".join(
             f"| {row.ticker} | {row.roc_auc:.3f} | {row.risk_recall:.1%} | {row.exit_rate:.1%} | "
+            f"{row.average_risk_threshold:.2f} | {row.fallback_rate:.1%} | "
             f"{row.strategy_annual_return:.1%} | {row.strategy_sharpe:.2f} | {row.benchmark_sharpe:.2f} | "
             f"{row.maximum_drawdown:.1%} | {row.benchmark_drawdown:.1%} |"
             for row in context_results.itertuples(index=False)
@@ -352,8 +390,8 @@ Uses credit versus Treasuries, the dollar, gold, VIX, SPY trend and market bread
 - Assets with higher Sharpe than buy and hold: **{context_sharpe} / {len(context_results)}**
 - Assets with smaller maximum drawdown: **{context_drawdown} / {len(context_results)}**
 
-| Asset | ROC AUC | Risk recall | Exit rate | Ann. return | Model Sharpe | B&H Sharpe | Model DD | B&H DD |
-|---|---:|---:|---:|---:|---:|---:|---:|---:|
+| Asset | ROC AUC | Risk recall | Exit rate | Avg threshold | No-filter fallback | Ann. return | Model Sharpe | B&H Sharpe | Model DD | B&H DD |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
 {context_rows}
 """
     return f"""# MarketLab Model Training — {market_date}
@@ -427,7 +465,7 @@ def main() -> None:
         risk_prediction_parts.append(risk_evaluated.reset_index())
         if set(CONTEXT_RISK_FEATURES).issubset(asset.columns):
             context_evaluated, context_summary = downside_risk_evaluation(
-                asset, feature_names=CONTEXT_RISK_FEATURES
+                asset, feature_names=CONTEXT_RISK_FEATURES, nested_threshold=True
             )
             context_summary["ticker"] = ticker
             context_result_rows.append(context_summary)
