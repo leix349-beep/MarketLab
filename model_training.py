@@ -383,6 +383,52 @@ def regime_stability_evaluation(portfolio: pd.DataFrame) -> pd.DataFrame:
     return pd.DataFrame(rows)
 
 
+def volatility_target_robustness(data: pd.DataFrame, target_volatility: float = 0.12,
+                                 fee: float = 0.001) -> pd.DataFrame:
+    """Audit a fixed volatility target across assets and calendar periods."""
+    if not isinstance(data.index, pd.MultiIndex) or "ticker_id" not in data.index.names:
+        raise ValueError("Robustness audit requires a ticker-indexed training panel.")
+    samples = []
+    rows = []
+    for ticker in data.index.get_level_values("ticker_id").unique():
+        asset = data.xs(ticker, level="ticker_id").sort_index()
+        if not {"vol_21", "future_return"}.issubset(asset.columns):
+            continue
+        sampled = asset[["vol_21", "future_return"]].dropna().iloc[::5].copy()
+        if len(sampled) < 20:
+            continue
+        sampled["weight"] = (target_volatility / sampled["vol_21"]).clip(0, 1)
+        turnover = sampled["weight"].diff().abs().fillna(sampled["weight"])
+        sampled["vol_target_return"] = sampled["weight"] * sampled["future_return"] - turnover * fee
+        sampled["buy_hold_return"] = sampled["future_return"]
+        sampled["ticker"] = ticker
+        samples.append(sampled)
+        target = performance_metrics(sampled["vol_target_return"])
+        benchmark = performance_metrics(sampled["buy_hold_return"])
+        rows.append({
+            "scope": "Asset", "label": ticker, "observations": len(sampled),
+            "average_exposure": sampled["weight"].mean(),
+            **{f"vol_target_{key}": value for key, value in target.items()},
+            **{f"buy_hold_{key}": value for key, value in benchmark.items()},
+        })
+    if not samples:
+        return pd.DataFrame()
+    panel = pd.concat(samples)
+    basket = panel.groupby(level=0)[["vol_target_return", "buy_hold_return"]].mean()
+    for year, period in basket.groupby(basket.index.year):
+        if len(period) < 20:
+            continue
+        target = performance_metrics(period["vol_target_return"])
+        benchmark = performance_metrics(period["buy_hold_return"])
+        rows.append({
+            "scope": "Calendar year", "label": str(year), "observations": len(period),
+            "average_exposure": float("nan"),
+            **{f"vol_target_{key}": value for key, value in target.items()},
+            **{f"buy_hold_{key}": value for key, value in benchmark.items()},
+        })
+    return pd.DataFrame(rows)
+
+
 def download_dataset() -> pd.DataFrame:
     parts = []
     frames: dict[str, pd.DataFrame] = {}
@@ -419,6 +465,7 @@ def render_report(results: pd.DataFrame, risk_results: pd.DataFrame,
                   context_results: pd.DataFrame,
                   portfolio_result: dict | None,
                   regime_results: pd.DataFrame,
+                  volatility_results: pd.DataFrame,
                   coefficients: pd.Series, market_date: str) -> str:
     rows = "\n".join(f"| {name} | {value:+.4f} |" for name, value in coefficients.items())
     result_rows = "\n".join(
@@ -537,6 +584,40 @@ Insufficient validated portfolio observations were available.
 
 States use information available on each decision date: SPY MA20/60 trend, VIX 25, and an expanding prior median of realized volatility. No crisis dates are selected after seeing returns.
 """
+    if volatility_results.empty:
+        volatility_section = """## Volatility-Target Robustness: NOT RUN
+
+Insufficient multi-asset history was available.
+"""
+    else:
+        asset_rows = volatility_results[volatility_results["scope"] == "Asset"]
+        year_rows = volatility_results[volatility_results["scope"] == "Calendar year"]
+        asset_wins = int((asset_rows["vol_target_sharpe"] > asset_rows["buy_hold_sharpe"]).sum())
+        year_wins = int((year_rows["vol_target_sharpe"] > year_rows["buy_hold_sharpe"]).sum())
+        drawdown_wins = int((asset_rows["vol_target_drawdown"] > asset_rows["buy_hold_drawdown"]).sum())
+        volatility_pass = (asset_wins >= len(asset_rows) / 2 and
+                           year_wins >= len(year_rows) / 2 and
+                           drawdown_wins >= len(asset_rows) / 2)
+        volatility_verdict = "PASS FOR PAPER TESTING" if volatility_pass else "NOT YET ROBUST"
+        volatility_rows = "\n".join(
+            f"| {row.scope} | {row.label} | {row.observations} | "
+            f"{row.vol_target_annual_return:.1%} | {row.vol_target_sharpe:.2f} | "
+            f"{row.vol_target_drawdown:.1%} | {row.buy_hold_annual_return:.1%} | "
+            f"{row.buy_hold_sharpe:.2f} | {row.buy_hold_drawdown:.1%} |"
+            for row in volatility_results.itertuples(index=False)
+        )
+        volatility_section = f"""## Volatility-Target Robustness: {volatility_verdict}
+
+- Higher Sharpe across assets: **{asset_wins} / {len(asset_rows)}**
+- Smaller drawdown across assets: **{drawdown_wins} / {len(asset_rows)}**
+- Higher Sharpe across calendar years: **{year_wins} / {len(year_rows)}**
+
+| Scope | Asset / period | Observations | Vol-target ann. return | Vol-target Sharpe | Vol-target DD | B&H ann. return | B&H Sharpe | B&H DD |
+|---|---|---:|---:|---:|---:|---:|---:|---:|
+{volatility_rows}
+
+The 12% target is fixed before evaluation. Weights use only trailing volatility, five-day returns do not overlap, and 0.10% turnover cost is deducted.
+"""
     return f"""# MarketLab Model Training — {market_date}
 
 Chronological out-of-sample research result. This model does not place orders.
@@ -576,6 +657,8 @@ Chronological out-of-sample research result. This model does not place orders.
 
 {stability_section}
 
+{volatility_section}
+
 ## Latest standardized coefficients
 
 | Feature | Coefficient |
@@ -597,6 +680,7 @@ def main() -> None:
     portfolio_result = None
     portfolio_predictions = None
     regime_results = pd.DataFrame()
+    volatility_results = volatility_target_robustness(data)
     coefficient_parts = []
     available_tickers = list(data.index.get_level_values("ticker_id").unique())
     for ticker in available_tickers:
@@ -665,8 +749,11 @@ def main() -> None:
         pd.DataFrame().to_csv(OUTPUT_DIR / "latest_portfolio.csv", index=False)
         pd.DataFrame().to_csv(OUTPUT_DIR / "latest_portfolio_predictions.csv", index=False)
     regime_results.assign(market_date=market_date).to_csv(OUTPUT_DIR / "latest_regimes.csv", index=False)
+    volatility_results.assign(market_date=market_date).to_csv(
+        OUTPUT_DIR / "latest_volatility_target.csv", index=False
+    )
     report = render_report(results, risk_results, context_results, portfolio_result,
-                           regime_results, coefficients, market_date)
+                           regime_results, volatility_results, coefficients, market_date)
     (OUTPUT_DIR / "latest.md").write_text(report, encoding="utf-8")
     history = OUTPUT_DIR / "history"
     history.mkdir(exist_ok=True)

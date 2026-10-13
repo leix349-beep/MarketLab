@@ -5,7 +5,8 @@ from unittest.mock import patch
 from model_training import (CONTEXT_FEATURES, FEATURES, RISK_FEATURES, build_context_features,
                             build_features, chronological_evaluation, downside_risk_evaluation,
                             download_dataset, performance_metrics, portfolio_regime_evaluation,
-                            regime_stability_evaluation, roc_auc, select_risk_threshold)
+                            regime_stability_evaluation, roc_auc, select_risk_threshold,
+                            volatility_target_robustness)
 
 
 class ModelTrainingTests(unittest.TestCase):
@@ -130,6 +131,23 @@ class ModelTrainingTests(unittest.TestCase):
         self.assertGreaterEqual(len(regimes), 5)
         self.assertTrue((regimes["observations"] >= 20).all())
         self.assertTrue(regimes.filter(like="sharpe").apply(np.isfinite).all().all())
+
+    def test_volatility_target_audits_assets_and_time_periods(self):
+        dates = pd.bdate_range("2018-01-01", periods=1500)
+        parts = []
+        for ticker, scale in (("SPY", 1.0), ("QQQ", 1.4), ("XLF", 1.2)):
+            frame = pd.DataFrame({
+                "vol_21": 0.10 * scale + 0.04 * np.abs(np.sin(np.arange(len(dates)) / 50)),
+                "future_return": 0.002 + scale * np.sin(np.arange(len(dates)) / 30) * 0.015,
+                "ticker_id": ticker,
+            }, index=dates)
+            parts.append(frame.set_index("ticker_id", append=True))
+        panel = pd.concat(parts)
+        panel.index.names = ["date", "ticker_id"]
+        result = volatility_target_robustness(panel)
+        self.assertEqual(set(result[result["scope"] == "Asset"]["label"]), {"SPY", "QQQ", "XLF"})
+        self.assertGreaterEqual(len(result[result["scope"] == "Calendar year"]), 5)
+        self.assertTrue(result.filter(like="sharpe").apply(np.isfinite).all().all())
 
 
 if __name__ == "__main__":
