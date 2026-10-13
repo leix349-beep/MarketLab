@@ -2,8 +2,9 @@ import unittest
 import numpy as np
 import pandas as pd
 from unittest.mock import patch
-from model_training import (FEATURES, RISK_FEATURES, build_features, chronological_evaluation,
-                            downside_risk_evaluation, download_dataset, performance_metrics, roc_auc)
+from model_training import (CONTEXT_FEATURES, FEATURES, RISK_FEATURES, build_context_features,
+                            build_features, chronological_evaluation, downside_risk_evaluation,
+                            download_dataset, performance_metrics, roc_auc)
 
 
 class ModelTrainingTests(unittest.TestCase):
@@ -53,6 +54,18 @@ class ModelTrainingTests(unittest.TestCase):
         self.assertEqual(result.index.min(), index[600])
         self.assertTrue(0 <= summary["roc_auc"] <= 1)
         self.assertTrue(((result["position"] == 0) | (result["position"] == 1)).all())
+
+    def test_context_features_use_aligned_market_history(self):
+        index = pd.bdate_range("2020-01-01", periods=260)
+        frames = {}
+        for offset, ticker in enumerate(("SPY", "QQQ", "IWM", "XLK", "XLF", "XLE",
+                                         "TLT", "HYG", "UUP", "GLD", "^VIX")):
+            close = 100 + offset + np.linspace(0, 30, len(index))
+            frames[ticker] = pd.DataFrame({"Close": close}, index=index)
+        context = build_context_features(frames).dropna()
+        self.assertFalse(context.empty)
+        self.assertTrue(context[list(CONTEXT_FEATURES)].notna().all().all())
+        self.assertTrue(context["breadth_above_ma60"].between(0, 1).all())
 
 
 if __name__ == "__main__":

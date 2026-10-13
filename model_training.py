@@ -14,6 +14,11 @@ import yfinance as yf
 TRAIN_TICKERS = ("SPY", "QQQ", "IWM", "XLK", "XLF", "XLE")
 FEATURES = ("ret_5", "ret_21", "ma_gap", "rsi14", "vol_21", "drawdown_63")
 RISK_FEATURES = FEATURES + ("ret_63", "ma200_gap", "vol_ratio", "downside_vol_21")
+CONTEXT_TICKERS = ("TLT", "HYG", "UUP", "GLD", "^VIX")
+CONTEXT_FEATURES = ("market_ret_21", "market_ma_gap", "credit_vs_treasury_21",
+                    "dollar_ret_21", "gold_ret_21", "vix_level", "vix_change_5",
+                    "breadth_above_ma60")
+CONTEXT_RISK_FEATURES = RISK_FEATURES + CONTEXT_FEATURES
 OUTPUT_DIR = Path("published_research/model_training")
 
 
@@ -61,6 +66,36 @@ def build_features(frame: pd.DataFrame, horizon: int = 5) -> pd.DataFrame:
     # Keep the direction-model history unchanged when longer-horizon candidate
     # features are added. Each candidate drops only the columns it actually uses.
     return result.dropna(subset=list(FEATURES) + ["future_return", "label", "risk_label"])
+
+
+def build_context_features(frames: dict[str, pd.DataFrame]) -> pd.DataFrame:
+    """Create cross-asset state variables using only same-day or earlier closes."""
+    required = {"SPY", "TLT", "HYG", "UUP", "GLD", "^VIX"}
+    if not required.issubset(frames):
+        return pd.DataFrame()
+    closes = {}
+    for ticker, frame in frames.items():
+        if frame.empty or "Close" not in frame:
+            continue
+        closes[ticker] = frame["Close"].astype(float)
+    if not required.issubset(closes):
+        return pd.DataFrame()
+    prices = pd.concat(closes, axis=1, sort=False).sort_index().ffill(limit=3)
+    result = pd.DataFrame(index=prices.index)
+    result["market_ret_21"] = prices["SPY"].pct_change(21)
+    result["market_ma_gap"] = prices["SPY"].rolling(20).mean() / prices["SPY"].rolling(60).mean() - 1
+    result["credit_vs_treasury_21"] = prices["HYG"].pct_change(21) - prices["TLT"].pct_change(21)
+    result["dollar_ret_21"] = prices["UUP"].pct_change(21)
+    result["gold_ret_21"] = prices["GLD"].pct_change(21)
+    result["vix_level"] = prices["^VIX"] / 100
+    result["vix_change_5"] = prices["^VIX"].pct_change(5)
+    breadth_members = [ticker for ticker in TRAIN_TICKERS if ticker in prices]
+    breadth = pd.concat(
+        [(prices[ticker] > prices[ticker].rolling(60).mean()).astype(float) for ticker in breadth_members],
+        axis=1,
+    )
+    result["breadth_above_ma60"] = breadth.mean(axis=1)
+    return result.replace([np.inf, -np.inf], np.nan)
 
 
 @dataclass
@@ -171,9 +206,10 @@ def roc_auc(y: pd.Series, score: pd.Series) -> float:
 def downside_risk_evaluation(dataset: pd.DataFrame, min_train: int = 756,
                              retrain_every: int = 63, embargo_days: int = 5,
                              minimum_risk_probability: float = 0.20,
-                             risk_margin: float = 0.05, fee: float = 0.001) -> tuple[pd.DataFrame, dict]:
+                             risk_margin: float = 0.05, fee: float = 0.001,
+                             feature_names: tuple[str, ...] = RISK_FEATURES) -> tuple[pd.DataFrame, dict]:
     """Test a candidate filter that exits when five-day downside risk is elevated."""
-    data = dataset.sort_index().dropna(subset=list(RISK_FEATURES) + ["future_return", "risk_label"]).copy()
+    data = dataset.sort_index().dropna(subset=list(feature_names) + ["future_return", "risk_label"]).copy()
     if len(data) < min_train + retrain_every:
         raise ValueError("Not enough observations for downside-risk evaluation.")
     probabilities = pd.Series(np.nan, index=data.index, dtype=float)
@@ -181,8 +217,8 @@ def downside_risk_evaluation(dataset: pd.DataFrame, min_train: int = 756,
     for start in range(min_train, len(data), retrain_every):
         end = min(start + retrain_every, len(data))
         train = data.iloc[:start - embargo_days]
-        model = fit_logistic(train[list(RISK_FEATURES)].to_numpy(), train["risk_label"].to_numpy())
-        probabilities.iloc[start:end] = model.predict_proba(data.iloc[start:end][list(RISK_FEATURES)].to_numpy())
+        model = fit_logistic(train[list(feature_names)].to_numpy(), train["risk_label"].to_numpy())
+        probabilities.iloc[start:end] = model.predict_proba(data.iloc[start:end][list(feature_names)].to_numpy())
         thresholds.iloc[start:end] = max(minimum_risk_probability,
                                          float(train["risk_label"].mean()) + risk_margin)
     evaluated = data.loc[probabilities.notna()].copy()
@@ -225,17 +261,26 @@ def downside_risk_evaluation(dataset: pd.DataFrame, min_train: int = 756,
 
 def download_dataset() -> pd.DataFrame:
     parts = []
-    for ticker in TRAIN_TICKERS:
+    frames: dict[str, pd.DataFrame] = {}
+    for ticker in (*TRAIN_TICKERS, *CONTEXT_TICKERS):
         frame = yf.download(ticker, period="10y", auto_adjust=True, progress=False)
         if isinstance(frame.columns, pd.MultiIndex):
             frame.columns = frame.columns.get_level_values(0)
         if frame.empty or "Close" not in frame:
             print(f"Skipping {ticker}: no usable training history")
             continue
+        frames[ticker] = frame
+    context = build_context_features(frames)
+    for ticker in TRAIN_TICKERS:
+        if ticker not in frames:
+            continue
+        frame = frames[ticker]
         features = build_features(frame)
         if features.empty:
             print(f"Skipping {ticker}: insufficient feature history")
             continue
+        if not context.empty:
+            features = features.join(context.reindex(features.index).ffill(limit=3), how="left")
         features["ticker"] = ticker
         features.index = pd.MultiIndex.from_arrays(
             [features.index, np.repeat(ticker, len(features))], names=["date", "ticker_id"]
@@ -247,6 +292,7 @@ def download_dataset() -> pd.DataFrame:
 
 
 def render_report(results: pd.DataFrame, risk_results: pd.DataFrame,
+                  context_results: pd.DataFrame,
                   coefficients: pd.Series, market_date: str) -> str:
     rows = "\n".join(f"| {name} | {value:+.4f} |" for name, value in coefficients.items())
     result_rows = "\n".join(
@@ -279,6 +325,37 @@ def render_report(results: pd.DataFrame, risk_results: pd.DataFrame,
                    better_sharpe_filters >= len(risk_results) / 2 and
                    lower_drawdown_filters >= len(risk_results) / 2)
     filter_verdict = "PASS FOR FURTHER PAPER TESTING" if filter_pass else "REJECTED AS A TRADING MODEL"
+    if context_results.empty:
+        context_section = """## Cross-Asset Risk Candidate: NOT RUN
+
+One or more required context series were unavailable, so no stale or partial result was substituted.
+"""
+    else:
+        context_rows = "\n".join(
+            f"| {row.ticker} | {row.roc_auc:.3f} | {row.risk_recall:.1%} | {row.exit_rate:.1%} | "
+            f"{row.strategy_annual_return:.1%} | {row.strategy_sharpe:.2f} | {row.benchmark_sharpe:.2f} | "
+            f"{row.maximum_drawdown:.1%} | {row.benchmark_drawdown:.1%} |"
+            for row in context_results.itertuples(index=False)
+        )
+        context_informative = int((context_results["roc_auc"] > 0.52).sum())
+        context_sharpe = int((context_results["strategy_sharpe"] > context_results["benchmark_sharpe"]).sum())
+        context_drawdown = int((context_results["maximum_drawdown"] > context_results["benchmark_drawdown"]).sum())
+        context_pass = (context_informative >= len(context_results) / 2 and
+                        context_sharpe >= len(context_results) / 2 and
+                        context_drawdown >= len(context_results) / 2)
+        context_verdict = "PASS FOR FURTHER PAPER TESTING" if context_pass else "REJECTED AS A TRADING MODEL"
+        context_section = f"""## Cross-Asset Risk Candidate: {context_verdict}
+
+Uses credit versus Treasuries, the dollar, gold, VIX, SPY trend and market breadth in addition to asset-price features.
+
+- Assets with ROC AUC above 0.52: **{context_informative} / {len(context_results)}**
+- Assets with higher Sharpe than buy and hold: **{context_sharpe} / {len(context_results)}**
+- Assets with smaller maximum drawdown: **{context_drawdown} / {len(context_results)}**
+
+| Asset | ROC AUC | Risk recall | Exit rate | Ann. return | Model Sharpe | B&H Sharpe | Model DD | B&H DD |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|
+{context_rows}
+"""
     return f"""# MarketLab Model Training — {market_date}
 
 Chronological out-of-sample research result. This model does not place orders.
@@ -312,6 +389,8 @@ Chronological out-of-sample research result. This model does not place orders.
 |---|---:|---:|---:|---:|---:|---:|---:|---:|---:|
 {filter_rows}
 
+{context_section}
+
 ## Latest standardized coefficients
 
 | Feature | Coefficient |
@@ -328,6 +407,8 @@ def main() -> None:
     prediction_parts = []
     risk_result_rows = []
     risk_prediction_parts = []
+    context_result_rows = []
+    context_prediction_parts = []
     coefficient_parts = []
     available_tickers = list(data.index.get_level_values("ticker_id").unique())
     for ticker in available_tickers:
@@ -344,6 +425,15 @@ def main() -> None:
         risk_evaluated = risk_evaluated.copy()
         risk_evaluated["ticker"] = ticker
         risk_prediction_parts.append(risk_evaluated.reset_index())
+        if set(CONTEXT_RISK_FEATURES).issubset(asset.columns):
+            context_evaluated, context_summary = downside_risk_evaluation(
+                asset, feature_names=CONTEXT_RISK_FEATURES
+            )
+            context_summary["ticker"] = ticker
+            context_result_rows.append(context_summary)
+            context_evaluated = context_evaluated.copy()
+            context_evaluated["ticker"] = ticker
+            context_prediction_parts.append(context_evaluated.reset_index())
         model = fit_logistic(asset[list(FEATURES)].to_numpy(), asset["label"].to_numpy())
         coefficient_parts.append(pd.Series(model.weights[:-1], index=FEATURES, name=ticker))
     results = pd.DataFrame(result_rows)[["ticker", "observations", "accuracy", "naive_accuracy",
@@ -356,6 +446,7 @@ def main() -> None:
                                          "minimum_edge", "fee"]]
     coefficients = pd.concat(coefficient_parts, axis=1).mean(axis=1)
     risk_results = pd.DataFrame(risk_result_rows)
+    context_results = pd.DataFrame(context_result_rows)
     market_date = pd.Timestamp(data.index.get_level_values("date").max()).date().isoformat()
     OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
     results.assign(market_date=market_date).to_csv(OUTPUT_DIR / "latest.csv", index=False)
@@ -366,7 +457,15 @@ def main() -> None:
     pd.concat(risk_prediction_parts).sort_values(["date", "ticker"]).groupby("ticker").tail(100).to_csv(
         OUTPUT_DIR / "latest_risk_predictions.csv", index=False
     )
-    report = render_report(results, risk_results, coefficients, market_date)
+    context_results.assign(market_date=market_date).to_csv(OUTPUT_DIR / "latest_context_risk.csv", index=False)
+    if context_prediction_parts:
+        context_predictions = pd.concat(context_prediction_parts).sort_values(["date", "ticker"])
+        context_predictions.groupby("ticker").tail(100).to_csv(
+            OUTPUT_DIR / "latest_context_risk_predictions.csv", index=False
+        )
+    else:
+        pd.DataFrame().to_csv(OUTPUT_DIR / "latest_context_risk_predictions.csv", index=False)
+    report = render_report(results, risk_results, context_results, coefficients, market_date)
     (OUTPUT_DIR / "latest.md").write_text(report, encoding="utf-8")
     history = OUTPUT_DIR / "history"
     history.mkdir(exist_ok=True)

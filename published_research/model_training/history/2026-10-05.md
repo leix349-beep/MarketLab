@@ -42,9 +42,27 @@ Chronological out-of-sample research result. This model does not place orders.
 | IWM | 19.8% | 0.441 | 2.6% | 6.1% | 7.0% | 0.44 | 0.66 | -28.7% | -30.4% |
 | QQQ | 19.9% | 0.549 | 17.5% | 16.4% | 9.3% | 0.61 | 0.94 | -43.1% | -35.1% |
 | SPY | 13.3% | 0.580 | 11.7% | 8.3% | 11.4% | 0.86 | 1.07 | -23.2% | -23.2% |
-| XLE | 23.6% | 0.462 | 9.0% | 9.6% | 20.3% | 0.88 | 1.05 | -22.0% | -22.5% |
-| XLF | 15.5% | 0.504 | 3.3% | 3.4% | 14.0% | 0.82 | 0.91 | -23.7% | -24.9% |
+| XLE | 23.6% | 0.462 | 8.7% | 9.5% | 20.1% | 0.88 | 1.05 | -22.0% | -22.5% |
+| XLF | 15.6% | 0.507 | 3.7% | 3.7% | 14.0% | 0.82 | 0.91 | -23.7% | -24.9% |
 | XLK | 21.3% | 0.497 | 12.4% | 13.9% | 9.8% | 0.56 | 1.02 | -41.4% | -31.9% |
+
+## Cross-Asset Risk Candidate: REJECTED AS A TRADING MODEL
+
+Uses credit versus Treasuries, the dollar, gold, VIX, SPY trend and market breadth in addition to asset-price features.
+
+- Assets with ROC AUC above 0.52: **3 / 6**
+- Assets with higher Sharpe than buy and hold: **0 / 6**
+- Assets with smaller maximum drawdown: **0 / 6**
+
+| Asset | ROC AUC | Risk recall | Exit rate | Ann. return | Model Sharpe | B&H Sharpe | Model DD | B&H DD |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|
+| IWM | 0.450 | 11.7% | 14.4% | 1.8% | 0.19 | 0.66 | -38.0% | -30.4% |
+| QQQ | 0.536 | 17.5% | 15.1% | 9.8% | 0.61 | 0.94 | -41.9% | -35.1% |
+| SPY | 0.590 | 16.5% | 12.5% | 8.6% | 0.71 | 1.07 | -23.4% | -23.2% |
+| XLE | 0.461 | 12.3% | 18.0% | 10.5% | 0.54 | 1.05 | -22.5% | -22.5% |
+| XLF | 0.552 | 23.6% | 17.8% | 7.0% | 0.52 | 0.91 | -29.4% | -24.9% |
+| XLK | 0.488 | 13.6% | 15.5% | 9.5% | 0.55 | 1.02 | -34.3% | -31.9% |
+
 
 ## Latest standardized coefficients
 
