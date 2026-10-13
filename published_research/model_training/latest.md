@@ -43,7 +43,7 @@ Chronological out-of-sample research result. This model does not place orders.
 | QQQ | 19.9% | 0.549 | 17.5% | 16.4% | 9.3% | 0.61 | 0.94 | -43.1% | -35.1% |
 | SPY | 13.3% | 0.580 | 11.7% | 8.3% | 11.4% | 0.86 | 1.07 | -23.2% | -23.2% |
 | XLE | 23.6% | 0.462 | 8.7% | 9.5% | 20.1% | 0.88 | 1.05 | -22.0% | -22.5% |
-| XLF | 15.6% | 0.507 | 3.7% | 3.7% | 14.0% | 0.82 | 0.91 | -23.7% | -24.9% |
+| XLF | 15.5% | 0.504 | 3.3% | 3.4% | 14.0% | 0.82 | 0.91 | -23.7% | -24.9% |
 | XLK | 21.3% | 0.497 | 12.4% | 13.9% | 9.8% | 0.56 | 1.02 | -41.4% | -31.9% |
 
 ## Cross-Asset Risk Candidate: REJECTED AS A TRADING MODEL
@@ -60,7 +60,7 @@ Uses credit versus Treasuries, the dollar, gold, VIX, SPY trend and market bread
 | QQQ | 0.536 | 28.8% | 28.9% | 0.25 | 0.0% | 7.0% | 0.49 | 0.94 | -29.8% | -35.1% |
 | SPY | 0.590 | 39.8% | 31.6% | 0.25 | 0.0% | 9.5% | 0.86 | 1.07 | -23.2% | -23.2% |
 | XLE | 0.461 | 26.7% | 26.4% | 0.40 | 8.1% | 13.1% | 0.66 | 1.05 | -23.3% | -22.5% |
-| XLF | 0.552 | 34.3% | 33.0% | 0.29 | 4.1% | 1.6% | 0.18 | 0.91 | -29.7% | -24.9% |
+| XLF | 0.548 | 35.7% | 39.0% | 0.27 | 4.1% | -1.1% | -0.01 | 0.91 | -29.7% | -24.9% |
 | XLK | 0.488 | 23.9% | 25.6% | 0.26 | 0.0% | 9.2% | 0.54 | 1.02 | -29.3% | -31.9% |
 
 
@@ -76,6 +76,23 @@ The learned risk signal controls exposure on top of a fixed 12% volatility targe
 
 - Average ML exposure: **64.5%**
 - Average volatility-target exposure: **81.8%**
+
+
+## Observable-Regime Stability Audit
+
+- Volatility target beats buy and hold on Sharpe in **2 / 6** observable states.
+- ML allocation beats volatility target on Sharpe in **3 / 6** observable states.
+
+| Dimension | State | Observations | ML ann. return | ML Sharpe | Vol-target ann. return | Vol-target Sharpe | B&H ann. return | B&H Sharpe |
+|---|---|---:|---:|---:|---:|---:|---:|---:|
+| Market trend | Positive | 238 | 8.4% | 0.95 | 11.2% | 1.06 | 12.0% | 0.94 |
+| Market trend | Negative | 73 | 14.3% | 1.54 | 17.6% | 1.34 | 33.5% | 1.42 |
+| VIX state | Below 25 | 263 | 9.5% | 1.08 | 10.9% | 1.03 | 11.9% | 0.94 |
+| VIX state | 25 or above | 48 | 11.4% | 1.12 | 22.7% | 1.58 | 46.7% | 1.64 |
+| Realized volatility | At/below prior median | 166 | 13.2% | 1.47 | 14.3% | 1.35 | 15.2% | 1.37 |
+| Realized volatility | Above prior median | 119 | 6.0% | 0.63 | 7.6% | 0.69 | 13.9% | 0.75 |
+
+States use information available on each decision date: SPY MA20/60 trend, VIX 25, and an expanding prior median of realized volatility. No crisis dates are selected after seeing returns.
 
 
 ## Latest standardized coefficients

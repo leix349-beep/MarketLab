@@ -5,7 +5,7 @@ from unittest.mock import patch
 from model_training import (CONTEXT_FEATURES, FEATURES, RISK_FEATURES, build_context_features,
                             build_features, chronological_evaluation, downside_risk_evaluation,
                             download_dataset, performance_metrics, portfolio_regime_evaluation,
-                            roc_auc, select_risk_threshold)
+                            regime_stability_evaluation, roc_auc, select_risk_threshold)
 
 
 class ModelTrainingTests(unittest.TestCase):
@@ -110,6 +110,21 @@ class ModelTrainingTests(unittest.TestCase):
         self.assertTrue(sampled["model_weight"].between(0, 1).all())
         self.assertTrue((sampled["model_weight"] <= sampled["vol_target_weight"]).all())
         self.assertTrue(all(np.isfinite(value) for value in summary.values()))
+
+    def test_regime_audit_uses_observable_states(self):
+        index = pd.bdate_range("2018-01-01", periods=400)
+        portfolio = pd.DataFrame({
+            "market_ma_gap": np.sin(np.arange(len(index)) / 40) * 0.03,
+            "vix_level": np.where(np.arange(len(index)) % 7 == 0, 0.30, 0.18),
+            "vol_21": np.linspace(0.08, 0.30, len(index)),
+            "model_return": 0.001,
+            "vol_target_return": 0.0008,
+            "buy_hold_return": 0.0012,
+        }, index=index)
+        regimes = regime_stability_evaluation(portfolio)
+        self.assertGreaterEqual(len(regimes), 5)
+        self.assertTrue((regimes["observations"] >= 20).all())
+        self.assertTrue(regimes.filter(like="sharpe").apply(np.isfinite).all().all())
 
 
 if __name__ == "__main__":

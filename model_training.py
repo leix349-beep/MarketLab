@@ -333,6 +333,47 @@ def portfolio_regime_evaluation(evaluated: pd.DataFrame, target_volatility: floa
     return sampled, summary
 
 
+def regime_stability_evaluation(portfolio: pd.DataFrame) -> pd.DataFrame:
+    """Measure conditional performance using states observable at each decision date."""
+    required = {"market_ma_gap", "vix_level", "vol_21", "model_return",
+                "vol_target_return", "buy_hold_return"}
+    if not required.issubset(portfolio.columns):
+        raise ValueError("Regime audit is missing required portfolio or context columns.")
+    data = portfolio.sort_index().copy()
+    # The realized-volatility cutoff uses only prior observations, not a
+    # full-sample percentile that would leak knowledge of the future.
+    prior_median = data["vol_21"].expanding(min_periods=26).median().shift(1)
+    definitions = {
+        "Market trend": {
+            "Positive": data["market_ma_gap"] >= 0,
+            "Negative": data["market_ma_gap"] < 0,
+        },
+        "VIX state": {
+            "Below 25": data["vix_level"] < 0.25,
+            "25 or above": data["vix_level"] >= 0.25,
+        },
+        "Realized volatility": {
+            "At/below prior median": data["vol_21"] <= prior_median,
+            "Above prior median": data["vol_21"] > prior_median,
+        },
+    }
+    rows = []
+    for dimension, states in definitions.items():
+        for state, mask in states.items():
+            subset = data.loc[mask.fillna(False)]
+            if len(subset) < 20:
+                continue
+            row = {"dimension": dimension, "state": state, "observations": int(len(subset))}
+            for name, column in (("model", "model_return"), ("vol_target", "vol_target_return"),
+                                 ("buy_hold", "buy_hold_return")):
+                stats = performance_metrics(subset[column])
+                row[f"{name}_annual_return"] = stats["annual_return"]
+                row[f"{name}_volatility"] = stats["volatility"]
+                row[f"{name}_sharpe"] = stats["sharpe"]
+            rows.append(row)
+    return pd.DataFrame(rows)
+
+
 def download_dataset() -> pd.DataFrame:
     parts = []
     frames: dict[str, pd.DataFrame] = {}
@@ -368,6 +409,7 @@ def download_dataset() -> pd.DataFrame:
 def render_report(results: pd.DataFrame, risk_results: pd.DataFrame,
                   context_results: pd.DataFrame,
                   portfolio_result: dict | None,
+                  regime_results: pd.DataFrame,
                   coefficients: pd.Series, market_date: str) -> str:
     rows = "\n".join(f"| {name} | {value:+.4f} |" for name, value in coefficients.items())
     result_rows = "\n".join(
@@ -458,6 +500,32 @@ The learned risk signal controls exposure on top of a fixed {portfolio_result['t
 - Average ML exposure: **{portfolio_result['average_model_weight']:.1%}**
 - Average volatility-target exposure: **{portfolio_result['average_vol_target_weight']:.1%}**
 """
+    if regime_results.empty:
+        stability_section = """## Observable-Regime Stability Audit: NOT RUN
+
+Insufficient validated portfolio observations were available.
+"""
+    else:
+        regime_rows = "\n".join(
+            f"| {row.dimension} | {row.state} | {row.observations} | "
+            f"{row.model_annual_return:.1%} | {row.model_sharpe:.2f} | "
+            f"{row.vol_target_annual_return:.1%} | {row.vol_target_sharpe:.2f} | "
+            f"{row.buy_hold_annual_return:.1%} | {row.buy_hold_sharpe:.2f} |"
+            for row in regime_results.itertuples(index=False)
+        )
+        vol_wins = int((regime_results["vol_target_sharpe"] > regime_results["buy_hold_sharpe"]).sum())
+        ml_wins = int((regime_results["model_sharpe"] > regime_results["vol_target_sharpe"]).sum())
+        stability_section = f"""## Observable-Regime Stability Audit
+
+- Volatility target beats buy and hold on Sharpe in **{vol_wins} / {len(regime_results)}** observable states.
+- ML allocation beats volatility target on Sharpe in **{ml_wins} / {len(regime_results)}** observable states.
+
+| Dimension | State | Observations | ML ann. return | ML Sharpe | Vol-target ann. return | Vol-target Sharpe | B&H ann. return | B&H Sharpe |
+|---|---|---:|---:|---:|---:|---:|---:|---:|
+{regime_rows}
+
+States use information available on each decision date: SPY MA20/60 trend, VIX 25, and an expanding prior median of realized volatility. No crisis dates are selected after seeing returns.
+"""
     return f"""# MarketLab Model Training — {market_date}
 
 Chronological out-of-sample research result. This model does not place orders.
@@ -495,6 +563,8 @@ Chronological out-of-sample research result. This model does not place orders.
 
 {portfolio_section}
 
+{stability_section}
+
 ## Latest standardized coefficients
 
 | Feature | Coefficient |
@@ -515,6 +585,7 @@ def main() -> None:
     context_prediction_parts = []
     portfolio_result = None
     portfolio_predictions = None
+    regime_results = pd.DataFrame()
     coefficient_parts = []
     available_tickers = list(data.index.get_level_values("ticker_id").unique())
     for ticker in available_tickers:
@@ -542,6 +613,7 @@ def main() -> None:
             context_prediction_parts.append(context_evaluated.reset_index())
             if ticker == "SPY":
                 portfolio_predictions, portfolio_result = portfolio_regime_evaluation(context_evaluated)
+                regime_results = regime_stability_evaluation(portfolio_predictions)
         model = fit_logistic(asset[list(FEATURES)].to_numpy(), asset["label"].to_numpy())
         coefficient_parts.append(pd.Series(model.weights[:-1], index=FEATURES, name=ticker))
     results = pd.DataFrame(result_rows)[["ticker", "observations", "accuracy", "naive_accuracy",
@@ -581,7 +653,9 @@ def main() -> None:
     else:
         pd.DataFrame().to_csv(OUTPUT_DIR / "latest_portfolio.csv", index=False)
         pd.DataFrame().to_csv(OUTPUT_DIR / "latest_portfolio_predictions.csv", index=False)
-    report = render_report(results, risk_results, context_results, portfolio_result, coefficients, market_date)
+    regime_results.assign(market_date=market_date).to_csv(OUTPUT_DIR / "latest_regimes.csv", index=False)
+    report = render_report(results, risk_results, context_results, portfolio_result,
+                           regime_results, coefficients, market_date)
     (OUTPUT_DIR / "latest.md").write_text(report, encoding="utf-8")
     history = OUTPUT_DIR / "history"
     history.mkdir(exist_ok=True)
