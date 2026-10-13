@@ -125,6 +125,21 @@ States use information available on each decision date: SPY MA20/60 trend, VIX 2
 The 12% target is fixed before evaluation. Weights use only trailing volatility, five-day returns do not overlap, and 0.10% turnover cost is deducted.
 
 
+## Multi-Asset Allocation Candidate: REJECTED AS A TRADING MODEL
+
+- Trend/inverse-volatility allocation has the best yearly Sharpe in **2 / 10** years.
+- Assets are selected only when their 63-day return and price-versus-200-day-average are positive; otherwise that sleeve stays in cash.
+
+| Portfolio | Annual return | Volatility | Sharpe | Maximum drawdown | Calmar |
+|---|---:|---:|---:|---:|---:|
+| Trend Risk Parity | 14.8% | 16.6% | 0.92 | -22.9% | 0.65 |
+| Inverse Volatility | 15.7% | 18.3% | 0.89 | -38.3% | 0.41 |
+| Equal Weight | 16.2% | 18.7% | 0.90 | -38.9% | 0.42 |
+| Spy | 15.1% | 16.8% | 0.92 | -33.6% | 0.45 |
+
+The rule is fixed before evaluation, uses only decision-date information, rebalances every five sessions, and deducts 0.10% turnover cost.
+
+
 ## Latest standardized coefficients
 
 | Feature | Coefficient |

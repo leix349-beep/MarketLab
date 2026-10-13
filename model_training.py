@@ -429,6 +429,56 @@ def volatility_target_robustness(data: pd.DataFrame, target_volatility: float = 
     return pd.DataFrame(rows)
 
 
+def multi_asset_allocation_evaluation(data: pd.DataFrame, fee: float = 0.001
+                                      ) -> tuple[pd.DataFrame, pd.DataFrame]:
+    """Test a fixed trend/inverse-volatility allocation without fitted parameters."""
+    required = {"future_return", "vol_21", "ret_63", "ma200_gap"}
+    if not required.issubset(data.columns):
+        raise ValueError("Allocation audit is missing required observable features.")
+    tickers = [ticker for ticker in TRAIN_TICKERS
+               if ticker in data.index.get_level_values("ticker_id")]
+    panels = {column: data[column].unstack("ticker_id").reindex(columns=tickers)
+              for column in required}
+    valid = pd.concat(panels, axis=1).dropna()
+    if valid.empty:
+        return pd.DataFrame(), pd.DataFrame()
+    dates = valid.index[::5]
+    future = panels["future_return"].loc[dates]
+    inverse_vol = 1 / panels["vol_21"].loc[dates].replace(0, np.nan)
+    inverse_vol_weights = inverse_vol.div(inverse_vol.sum(axis=1), axis=0).fillna(0)
+    trend_mask = ((panels["ret_63"].loc[dates] > 0) &
+                  (panels["ma200_gap"].loc[dates] > 0)).astype(float)
+    trend_scores = inverse_vol * trend_mask
+    trend_weights = trend_scores.div(trend_scores.sum(axis=1), axis=0).fillna(0)
+    equal_weights = pd.DataFrame(1 / len(tickers), index=dates, columns=tickers)
+
+    def net_return(weights: pd.DataFrame) -> pd.Series:
+        turnover = weights.diff().abs().sum(axis=1).fillna(weights.abs().sum(axis=1))
+        return (weights * future).sum(axis=1) - turnover * fee
+
+    returns = pd.DataFrame({
+        "trend_risk_parity": net_return(trend_weights),
+        "inverse_volatility": net_return(inverse_vol_weights),
+        "equal_weight": net_return(equal_weights),
+        "spy": future["SPY"],
+    })
+    returns["trend_exposure"] = trend_weights.sum(axis=1)
+    returns["active_assets"] = (trend_weights > 0).sum(axis=1)
+    rows = []
+    for name in ("trend_risk_parity", "inverse_volatility", "equal_weight", "spy"):
+        stats = performance_metrics(returns[name])
+        rows.append({"scope": "Full history", "period": "All", "strategy": name,
+                     "observations": len(returns), **stats})
+    for year, period in returns.groupby(returns.index.year):
+        if len(period) < 20:
+            continue
+        for name in ("trend_risk_parity", "inverse_volatility", "equal_weight", "spy"):
+            stats = performance_metrics(period[name])
+            rows.append({"scope": "Calendar year", "period": str(year), "strategy": name,
+                         "observations": len(period), **stats})
+    return returns, pd.DataFrame(rows)
+
+
 def download_dataset() -> pd.DataFrame:
     parts = []
     frames: dict[str, pd.DataFrame] = {}
@@ -466,6 +516,7 @@ def render_report(results: pd.DataFrame, risk_results: pd.DataFrame,
                   portfolio_result: dict | None,
                   regime_results: pd.DataFrame,
                   volatility_results: pd.DataFrame,
+                  allocation_results: pd.DataFrame,
                   coefficients: pd.Series, market_date: str) -> str:
     rows = "\n".join(f"| {name} | {value:+.4f} |" for name, value in coefficients.items())
     result_rows = "\n".join(
@@ -618,6 +669,40 @@ Insufficient multi-asset history was available.
 
 The 12% target is fixed before evaluation. Weights use only trailing volatility, five-day returns do not overlap, and 0.10% turnover cost is deducted.
 """
+    if allocation_results.empty:
+        allocation_section = """## Multi-Asset Allocation Candidate: NOT RUN
+
+Insufficient aligned asset history was available.
+"""
+    else:
+        full = allocation_results[allocation_results["scope"] == "Full history"]
+        yearly = allocation_results[allocation_results["scope"] == "Calendar year"]
+        candidate = full[full["strategy"] == "trend_risk_parity"].iloc[0]
+        inverse = full[full["strategy"] == "inverse_volatility"].iloc[0]
+        equal = full[full["strategy"] == "equal_weight"].iloc[0]
+        spy = full[full["strategy"] == "spy"].iloc[0]
+        pivot = yearly.pivot(index="period", columns="strategy", values="sharpe")
+        year_wins = int((pivot["trend_risk_parity"] > pivot[["inverse_volatility", "equal_weight", "spy"]].max(axis=1)).sum())
+        allocation_pass = (candidate["sharpe"] > max(inverse["sharpe"], equal["sharpe"], spy["sharpe"]) and
+                           candidate["annual_return"] > 0 and
+                           year_wins >= len(pivot) / 2)
+        allocation_verdict = "PASS FOR PAPER TESTING" if allocation_pass else "REJECTED AS A TRADING MODEL"
+        allocation_rows = "\n".join(
+            f"| {row.strategy.replace('_', ' ').title()} | {row.annual_return:.1%} | "
+            f"{row.volatility:.1%} | {row.sharpe:.2f} | {row.drawdown:.1%} | {row.calmar:.2f} |"
+            for row in full.itertuples(index=False)
+        )
+        allocation_section = f"""## Multi-Asset Allocation Candidate: {allocation_verdict}
+
+- Trend/inverse-volatility allocation has the best yearly Sharpe in **{year_wins} / {len(pivot)}** years.
+- Assets are selected only when their 63-day return and price-versus-200-day-average are positive; otherwise that sleeve stays in cash.
+
+| Portfolio | Annual return | Volatility | Sharpe | Maximum drawdown | Calmar |
+|---|---:|---:|---:|---:|---:|
+{allocation_rows}
+
+The rule is fixed before evaluation, uses only decision-date information, rebalances every five sessions, and deducts 0.10% turnover cost.
+"""
     return f"""# MarketLab Model Training — {market_date}
 
 Chronological out-of-sample research result. This model does not place orders.
@@ -659,6 +744,8 @@ Chronological out-of-sample research result. This model does not place orders.
 
 {volatility_section}
 
+{allocation_section}
+
 ## Latest standardized coefficients
 
 | Feature | Coefficient |
@@ -681,6 +768,7 @@ def main() -> None:
     portfolio_predictions = None
     regime_results = pd.DataFrame()
     volatility_results = volatility_target_robustness(data)
+    allocation_predictions, allocation_results = multi_asset_allocation_evaluation(data)
     coefficient_parts = []
     available_tickers = list(data.index.get_level_values("ticker_id").unique())
     for ticker in available_tickers:
@@ -752,8 +840,15 @@ def main() -> None:
     volatility_results.assign(market_date=market_date).to_csv(
         OUTPUT_DIR / "latest_volatility_target.csv", index=False
     )
+    allocation_results.assign(market_date=market_date).to_csv(
+        OUTPUT_DIR / "latest_multi_asset.csv", index=False
+    )
+    allocation_predictions.tail(200).to_csv(
+        OUTPUT_DIR / "latest_multi_asset_predictions.csv"
+    )
     report = render_report(results, risk_results, context_results, portfolio_result,
-                           regime_results, volatility_results, coefficients, market_date)
+                           regime_results, volatility_results, allocation_results,
+                           coefficients, market_date)
     (OUTPUT_DIR / "latest.md").write_text(report, encoding="utf-8")
     history = OUTPUT_DIR / "history"
     history.mkdir(exist_ok=True)

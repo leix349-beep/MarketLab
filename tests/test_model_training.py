@@ -6,7 +6,7 @@ from model_training import (CONTEXT_FEATURES, FEATURES, RISK_FEATURES, build_con
                             build_features, chronological_evaluation, downside_risk_evaluation,
                             download_dataset, performance_metrics, portfolio_regime_evaluation,
                             regime_stability_evaluation, roc_auc, select_risk_threshold,
-                            volatility_target_robustness)
+                            volatility_target_robustness, multi_asset_allocation_evaluation)
 
 
 class ModelTrainingTests(unittest.TestCase):
@@ -148,6 +148,27 @@ class ModelTrainingTests(unittest.TestCase):
         self.assertEqual(set(result[result["scope"] == "Asset"]["label"]), {"SPY", "QQQ", "XLF"})
         self.assertGreaterEqual(len(result[result["scope"] == "Calendar year"]), 5)
         self.assertTrue(result.filter(like="sharpe").apply(np.isfinite).all().all())
+
+    def test_multi_asset_allocation_uses_bounded_observable_weights(self):
+        dates = pd.bdate_range("2017-01-01", periods=1800)
+        parts = []
+        for offset, ticker in enumerate(("SPY", "QQQ", "IWM", "XLK", "XLF", "XLE")):
+            frame = pd.DataFrame({
+                "future_return": np.sin(np.arange(len(dates)) / (20 + offset)) * 0.02,
+                "vol_21": 0.10 + offset * 0.02,
+                "ret_63": np.sin(np.arange(len(dates)) / 50),
+                "ma200_gap": np.cos(np.arange(len(dates)) / 60),
+                "ticker_id": ticker,
+            }, index=dates)
+            parts.append(frame.set_index("ticker_id", append=True))
+        panel = pd.concat(parts)
+        panel.index.names = ["date", "ticker_id"]
+        returns, summary = multi_asset_allocation_evaluation(panel)
+        self.assertFalse(returns.empty)
+        self.assertTrue(returns["trend_exposure"].between(0, 1).all())
+        self.assertTrue(returns["active_assets"].between(0, 6).all())
+        self.assertEqual(len(summary[summary["scope"] == "Full history"]), 4)
+        self.assertTrue(summary.filter(items=["sharpe", "drawdown"]).apply(np.isfinite).all().all())
 
 
 if __name__ == "__main__":
