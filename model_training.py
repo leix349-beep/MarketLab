@@ -16,6 +16,22 @@ FEATURES = ("ret_5", "ret_21", "ma_gap", "rsi14", "vol_21", "drawdown_63")
 OUTPUT_DIR = Path("published_research/model_training")
 
 
+def performance_metrics(returns: pd.Series, periods_per_year: float = 252 / 5) -> dict[str, float]:
+    """Risk/return metrics for non-overlapping five-session observations."""
+    returns = returns.replace([np.inf, -np.inf], np.nan).dropna()
+    if returns.empty:
+        return {"return": 0.0, "annual_return": 0.0, "volatility": 0.0,
+                "sharpe": 0.0, "drawdown": 0.0, "calmar": 0.0}
+    wealth = (1 + returns).cumprod()
+    drawdown = float((wealth / wealth.cummax() - 1).min())
+    annual_return = float(wealth.iloc[-1] ** (periods_per_year / len(returns)) - 1)
+    volatility = float(returns.std() * np.sqrt(periods_per_year))
+    sharpe = float(returns.mean() / returns.std() * np.sqrt(periods_per_year)) if returns.std() else 0.0
+    calmar = annual_return / abs(drawdown) if drawdown < 0 else 0.0
+    return {"return": float(wealth.iloc[-1] - 1), "annual_return": annual_return,
+            "volatility": volatility, "sharpe": sharpe, "drawdown": drawdown, "calmar": calmar}
+
+
 def build_features(frame: pd.DataFrame, horizon: int = 5) -> pd.DataFrame:
     """Create features known at the close and a future-return label."""
     close = frame["Close"].astype(float).dropna()
@@ -95,9 +111,8 @@ def chronological_evaluation(dataset: pd.DataFrame, min_train: int = 756,
     turnover = sampled["position"].diff().abs().fillna(sampled["position"])
     sampled = sampled.copy()
     sampled["strategy_return_net"] = sampled["strategy_return"] - turnover * fee
-    strategy_wealth = (1 + sampled["strategy_return_net"]).cumprod()
-    benchmark_wealth = (1 + sampled["future_return"]).cumprod()
-    drawdown = strategy_wealth / strategy_wealth.cummax() - 1
+    strategy_stats = performance_metrics(sampled["strategy_return_net"])
+    benchmark_stats = performance_metrics(sampled["future_return"])
     positives = evaluated["label"] == 1
     negatives = ~positives
     sensitivity = float((evaluated.loc[positives, "prediction"] == 1).mean()) if positives.any() else 0.0
@@ -113,9 +128,18 @@ def chronological_evaluation(dataset: pd.DataFrame, min_train: int = 756,
         "brier_score": float(((evaluated["probability"] - evaluated["label"]) ** 2).mean()),
         "signal_rate": float(evaluated["position"].mean()),
         "signal_win_rate": float((active["future_return"] > 0).mean()) if len(active) else 0.0,
-        "strategy_return": float(strategy_wealth.iloc[-1] - 1),
-        "benchmark_return": float(benchmark_wealth.iloc[-1] - 1),
-        "maximum_drawdown": float(drawdown.min()),
+        "strategy_return": strategy_stats["return"],
+        "strategy_annual_return": strategy_stats["annual_return"],
+        "strategy_volatility": strategy_stats["volatility"],
+        "strategy_sharpe": strategy_stats["sharpe"],
+        "maximum_drawdown": strategy_stats["drawdown"],
+        "strategy_calmar": strategy_stats["calmar"],
+        "benchmark_return": benchmark_stats["return"],
+        "benchmark_annual_return": benchmark_stats["annual_return"],
+        "benchmark_volatility": benchmark_stats["volatility"],
+        "benchmark_sharpe": benchmark_stats["sharpe"],
+        "benchmark_drawdown": benchmark_stats["drawdown"],
+        "benchmark_calmar": benchmark_stats["calmar"],
         "threshold": threshold,
         "average_decision_threshold": float(evaluated["decision_threshold"].mean()),
         "minimum_edge": minimum_edge,
@@ -157,8 +181,15 @@ def render_report(results: pd.DataFrame, coefficients: pd.Series, market_date: s
     )
     predictive_assets = int(((results["accuracy_edge"] > 0) & (results["balanced_accuracy"] > 0.5)).sum())
     outperforming_assets = int((results["strategy_return"] > results["benchmark_return"]).sum())
-    accepted = predictive_assets >= len(results) / 2 and outperforming_assets >= len(results) / 2
+    risk_adjusted_assets = int((results["strategy_sharpe"] > results["benchmark_sharpe"]).sum())
+    accepted = predictive_assets >= len(results) / 2 and risk_adjusted_assets >= len(results) / 2
     verdict = "PASS FOR FURTHER PAPER TESTING" if accepted else "REJECTED AS A TRADING MODEL"
+    risk_rows = "\n".join(
+        f"| {row.ticker} | {row.strategy_annual_return:.1%} | {row.benchmark_annual_return:.1%} | "
+        f"{row.strategy_volatility:.1%} | {row.benchmark_volatility:.1%} | {row.strategy_sharpe:.2f} | "
+        f"{row.benchmark_sharpe:.2f} | {row.strategy_calmar:.2f} | {row.benchmark_calmar:.2f} |"
+        for row in results.itertuples(index=False)
+    )
     return f"""# MarketLab Model Training — {market_date}
 
 Chronological out-of-sample research result. This model does not place orders.
@@ -167,6 +198,7 @@ Chronological out-of-sample research result. This model does not place orders.
 
 - Assets with predictive improvement over the naive baseline: **{predictive_assets} / {len(results)}**
 - Assets outperforming buy and hold: **{outperforming_assets} / {len(results)}**
+- Assets improving risk-adjusted return (Sharpe): **{risk_adjusted_assets} / {len(results)}**
 - A rejected model remains a recorded baseline; it must not generate a live-trading recommendation.
 
 ## Test Result by Asset
@@ -174,6 +206,12 @@ Chronological out-of-sample research result. This model does not place orders.
 | Asset | OOS rows | Accuracy | Edge vs naive | Balanced acc. | Exposure | Signal win rate | Model return | Buy & hold | Max drawdown |
 |---|---:|---:|---:|---:|---:|---:|---:|---:|---:|
 {result_rows}
+
+## Risk / Return Balance
+
+| Asset | Model ann. return | B&H ann. return | Model vol. | B&H vol. | Model Sharpe | B&H Sharpe | Model Calmar | B&H Calmar |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|
+{risk_rows}
 
 ## Latest standardized coefficients
 
@@ -203,8 +241,11 @@ def main() -> None:
         coefficient_parts.append(pd.Series(model.weights[:-1], index=FEATURES, name=ticker))
     results = pd.DataFrame(result_rows)[["ticker", "observations", "accuracy", "naive_accuracy",
                                          "accuracy_edge", "balanced_accuracy", "brier_score", "signal_rate",
-                                         "signal_win_rate", "strategy_return", "benchmark_return",
-                                         "maximum_drawdown", "threshold", "average_decision_threshold",
+                                         "signal_win_rate", "strategy_return", "strategy_annual_return",
+                                         "strategy_volatility", "strategy_sharpe", "maximum_drawdown",
+                                         "strategy_calmar", "benchmark_return", "benchmark_annual_return",
+                                         "benchmark_volatility", "benchmark_sharpe", "benchmark_drawdown",
+                                         "benchmark_calmar", "threshold", "average_decision_threshold",
                                          "minimum_edge", "fee"]]
     coefficients = pd.concat(coefficient_parts, axis=1).mean(axis=1)
     market_date = pd.Timestamp(data.index.get_level_values("date").max()).date().isoformat()

@@ -2,7 +2,7 @@ import unittest
 import numpy as np
 import pandas as pd
 from unittest.mock import patch
-from model_training import FEATURES, build_features, chronological_evaluation, download_dataset
+from model_training import FEATURES, build_features, chronological_evaluation, download_dataset, performance_metrics
 
 
 class ModelTrainingTests(unittest.TestCase):
@@ -31,6 +31,11 @@ class ModelTrainingTests(unittest.TestCase):
     def test_download_fails_cleanly_when_provider_is_empty(self, _download):
         with self.assertRaisesRegex(RuntimeError, "No training data"):
             download_dataset()
+
+    def test_risk_metrics_are_finite(self):
+        stats = performance_metrics(pd.Series([0.01, -0.02, 0.015, 0.0]))
+        self.assertTrue(all(np.isfinite(value) for value in stats.values()))
+        self.assertLessEqual(stats["drawdown"], 0)
 
 
 if __name__ == "__main__":
