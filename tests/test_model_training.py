@@ -4,7 +4,8 @@ import pandas as pd
 from unittest.mock import patch
 from model_training import (CONTEXT_FEATURES, FEATURES, RISK_FEATURES, build_context_features,
                             build_features, chronological_evaluation, downside_risk_evaluation,
-                            download_dataset, performance_metrics, roc_auc, select_risk_threshold)
+                            download_dataset, performance_metrics, portfolio_regime_evaluation,
+                            roc_auc, select_risk_threshold)
 
 
 class ModelTrainingTests(unittest.TestCase):
@@ -97,6 +98,18 @@ class ModelTrainingTests(unittest.TestCase):
         train.loc[train.index[::20], "risk_label"] = 1.0
         threshold = select_risk_threshold(train, RISK_FEATURES)
         self.assertIn(threshold, [float(value) for value in np.arange(0.10, 0.51, 0.05)] + [1.0])
+
+    def test_portfolio_weights_and_metrics_are_bounded(self):
+        index = pd.bdate_range("2020-01-01", periods=500)
+        evaluated = pd.DataFrame({
+            "vol_21": np.linspace(0.08, 0.30, len(index)),
+            "future_return": np.sin(np.arange(len(index)) / 20) * 0.02,
+            "risk_signal": (np.arange(len(index)) % 11 == 0).astype(int),
+        }, index=index)
+        sampled, summary = portfolio_regime_evaluation(evaluated)
+        self.assertTrue(sampled["model_weight"].between(0, 1).all())
+        self.assertTrue((sampled["model_weight"] <= sampled["vol_target_weight"]).all())
+        self.assertTrue(all(np.isfinite(value) for value in summary.values()))
 
 
 if __name__ == "__main__":

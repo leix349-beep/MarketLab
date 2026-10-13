@@ -296,6 +296,43 @@ def downside_risk_evaluation(dataset: pd.DataFrame, min_train: int = 756,
     return evaluated, summary
 
 
+def portfolio_regime_evaluation(evaluated: pd.DataFrame, target_volatility: float = 0.12,
+                                defensive_weight: float = 0.25,
+                                fee: float = 0.001) -> tuple[pd.DataFrame, dict]:
+    """Convert validated SPY risk probabilities into portfolio exposure.
+
+    The comparison separates the contribution of ordinary volatility targeting
+    from the incremental contribution of the learned cross-asset risk signal.
+    """
+    required = {"vol_21", "future_return", "risk_signal"}
+    if not required.issubset(evaluated.columns):
+        raise ValueError("Portfolio evaluation is missing required validated columns.")
+    sampled = evaluated.sort_index().iloc[::5].copy()
+    sampled["vol_target_weight"] = (target_volatility / sampled["vol_21"]).clip(0, 1).fillna(0)
+    multiplier = np.where(sampled["risk_signal"] == 1, defensive_weight, 1.0)
+    sampled["model_weight"] = sampled["vol_target_weight"] * multiplier
+    vol_turnover = sampled["vol_target_weight"].diff().abs().fillna(sampled["vol_target_weight"])
+    model_turnover = sampled["model_weight"].diff().abs().fillna(sampled["model_weight"])
+    sampled["buy_hold_return"] = sampled["future_return"]
+    sampled["vol_target_return"] = (sampled["vol_target_weight"] * sampled["future_return"] -
+                                     vol_turnover * fee)
+    sampled["model_return"] = sampled["model_weight"] * sampled["future_return"] - model_turnover * fee
+    buy_hold = performance_metrics(sampled["buy_hold_return"])
+    vol_target = performance_metrics(sampled["vol_target_return"])
+    model = performance_metrics(sampled["model_return"])
+    summary = {
+        "target_volatility": target_volatility,
+        "defensive_weight": defensive_weight,
+        "fee": fee,
+        "average_model_weight": float(sampled["model_weight"].mean()),
+        "average_vol_target_weight": float(sampled["vol_target_weight"].mean()),
+    }
+    for prefix, stats in (("model", model), ("vol_target", vol_target), ("buy_hold", buy_hold)):
+        for key, value in stats.items():
+            summary[f"{prefix}_{key}"] = value
+    return sampled, summary
+
+
 def download_dataset() -> pd.DataFrame:
     parts = []
     frames: dict[str, pd.DataFrame] = {}
@@ -330,6 +367,7 @@ def download_dataset() -> pd.DataFrame:
 
 def render_report(results: pd.DataFrame, risk_results: pd.DataFrame,
                   context_results: pd.DataFrame,
+                  portfolio_result: dict | None,
                   coefficients: pd.Series, market_date: str) -> str:
     rows = "\n".join(f"| {name} | {value:+.4f} |" for name, value in coefficients.items())
     result_rows = "\n".join(
@@ -394,6 +432,32 @@ Uses credit versus Treasuries, the dollar, gold, VIX, SPY trend and market bread
 |---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
 {context_rows}
 """
+    if portfolio_result is None:
+        portfolio_section = """## Portfolio Regime Candidate: NOT RUN
+
+The validated SPY context series was unavailable; no partial portfolio result was substituted.
+"""
+    else:
+        portfolio_pass = (
+            portfolio_result["model_sharpe"] > portfolio_result["vol_target_sharpe"] and
+            portfolio_result["model_sharpe"] > portfolio_result["buy_hold_sharpe"] and
+            portfolio_result["model_drawdown"] > portfolio_result["vol_target_drawdown"] and
+            portfolio_result["model_annual_return"] > 0
+        )
+        portfolio_verdict = "PASS FOR FURTHER PAPER TESTING" if portfolio_pass else "REJECTED AS A TRADING MODEL"
+        portfolio_section = f"""## Portfolio Regime Candidate: {portfolio_verdict}
+
+The learned risk signal controls exposure on top of a fixed {portfolio_result['target_volatility']:.0%} volatility target. This isolates whether machine learning adds value beyond ordinary risk scaling.
+
+| Portfolio | Annual return | Volatility | Sharpe | Maximum drawdown | Calmar |
+|---|---:|---:|---:|---:|---:|
+| ML risk allocation | {portfolio_result['model_annual_return']:.1%} | {portfolio_result['model_volatility']:.1%} | {portfolio_result['model_sharpe']:.2f} | {portfolio_result['model_drawdown']:.1%} | {portfolio_result['model_calmar']:.2f} |
+| Volatility target only | {portfolio_result['vol_target_annual_return']:.1%} | {portfolio_result['vol_target_volatility']:.1%} | {portfolio_result['vol_target_sharpe']:.2f} | {portfolio_result['vol_target_drawdown']:.1%} | {portfolio_result['vol_target_calmar']:.2f} |
+| Buy and hold | {portfolio_result['buy_hold_annual_return']:.1%} | {portfolio_result['buy_hold_volatility']:.1%} | {portfolio_result['buy_hold_sharpe']:.2f} | {portfolio_result['buy_hold_drawdown']:.1%} | {portfolio_result['buy_hold_calmar']:.2f} |
+
+- Average ML exposure: **{portfolio_result['average_model_weight']:.1%}**
+- Average volatility-target exposure: **{portfolio_result['average_vol_target_weight']:.1%}**
+"""
     return f"""# MarketLab Model Training — {market_date}
 
 Chronological out-of-sample research result. This model does not place orders.
@@ -429,6 +493,8 @@ Chronological out-of-sample research result. This model does not place orders.
 
 {context_section}
 
+{portfolio_section}
+
 ## Latest standardized coefficients
 
 | Feature | Coefficient |
@@ -447,6 +513,8 @@ def main() -> None:
     risk_prediction_parts = []
     context_result_rows = []
     context_prediction_parts = []
+    portfolio_result = None
+    portfolio_predictions = None
     coefficient_parts = []
     available_tickers = list(data.index.get_level_values("ticker_id").unique())
     for ticker in available_tickers:
@@ -472,6 +540,8 @@ def main() -> None:
             context_evaluated = context_evaluated.copy()
             context_evaluated["ticker"] = ticker
             context_prediction_parts.append(context_evaluated.reset_index())
+            if ticker == "SPY":
+                portfolio_predictions, portfolio_result = portfolio_regime_evaluation(context_evaluated)
         model = fit_logistic(asset[list(FEATURES)].to_numpy(), asset["label"].to_numpy())
         coefficient_parts.append(pd.Series(model.weights[:-1], index=FEATURES, name=ticker))
     results = pd.DataFrame(result_rows)[["ticker", "observations", "accuracy", "naive_accuracy",
@@ -503,7 +573,15 @@ def main() -> None:
         )
     else:
         pd.DataFrame().to_csv(OUTPUT_DIR / "latest_context_risk_predictions.csv", index=False)
-    report = render_report(results, risk_results, context_results, coefficients, market_date)
+    if portfolio_result is not None and portfolio_predictions is not None:
+        pd.DataFrame([portfolio_result | {"market_date": market_date}]).to_csv(
+            OUTPUT_DIR / "latest_portfolio.csv", index=False
+        )
+        portfolio_predictions.tail(200).to_csv(OUTPUT_DIR / "latest_portfolio_predictions.csv")
+    else:
+        pd.DataFrame().to_csv(OUTPUT_DIR / "latest_portfolio.csv", index=False)
+        pd.DataFrame().to_csv(OUTPUT_DIR / "latest_portfolio_predictions.csv", index=False)
+    report = render_report(results, risk_results, context_results, portfolio_result, coefficients, market_date)
     (OUTPUT_DIR / "latest.md").write_text(report, encoding="utf-8")
     history = OUTPUT_DIR / "history"
     history.mkdir(exist_ok=True)
