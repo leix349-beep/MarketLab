@@ -180,6 +180,22 @@ This test uses SPY, IWM, long Treasuries, high-yield credit, gold and the U.S. d
 
 The resampling keeps four adjacent five-session observations together. A candidate passes only if every 95% interval remains above zero in addition to the chronological and yearly gates.
 
+### Cost and rebalance sensitivity
+
+| One-way cost | Rebalance interval | Annual return | Sharpe | Maximum drawdown |
+|---:|---:|---:|---:|---:|
+| 0.05% | 5 sessions | 9.9% | 1.26 | -12.2% |
+| 0.05% | 10 sessions | 10.0% | 1.27 | -12.4% |
+| 0.05% | 20 sessions | 9.5% | 1.14 | -17.1% |
+| 0.10% | 5 sessions | 9.6% | 1.22 | -12.4% |
+| 0.10% | 10 sessions | 9.8% | 1.24 | -12.5% |
+| 0.10% | 20 sessions | 9.4% | 1.12 | -17.1% |
+| 0.20% | 5 sessions | 9.0% | 1.16 | -12.6% |
+| 0.20% | 10 sessions | 9.4% | 1.20 | -12.7% |
+| 0.20% | 20 sessions | 9.0% | 1.08 | -17.2% |
+
+The candidate must remain profitable, above 1.0 Sharpe and within a 20% drawdown in every predeclared stress scenario.
+
 
 ## Latest standardized coefficients
 

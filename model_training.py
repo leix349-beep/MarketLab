@@ -483,9 +483,12 @@ def multi_asset_allocation_evaluation(data: pd.DataFrame, fee: float = 0.001,
     return returns, pd.DataFrame(rows)
 
 
-def dynamic_growth_defense_evaluation(data: pd.DataFrame, fee: float = 0.001
+def dynamic_growth_defense_evaluation(data: pd.DataFrame, fee: float = 0.001,
+                                      rebalance_every: int = 1
                                       ) -> tuple[pd.DataFrame, pd.DataFrame]:
     """Switch a fixed growth sleeve into a diversified defensive sleeve."""
+    if rebalance_every < 1:
+        raise ValueError("Rebalance interval must be at least one five-session block.")
     required = {"future_return", "vol_21", "ret_63", "ma200_gap"}
     if not required.issubset(data.columns):
         raise ValueError("Dynamic allocation is missing required observable features.")
@@ -510,6 +513,15 @@ def dynamic_growth_defense_evaluation(data: pd.DataFrame, fee: float = 0.001
     growth_share = positive_trend * 0.5
     dynamic = defensive.mul(1 - growth_share, axis=0) + growth.mul(growth_share, axis=0)
 
+    def hold_weights(weights: pd.DataFrame) -> pd.DataFrame:
+        if rebalance_every == 1:
+            return weights
+        return weights.iloc[::rebalance_every].reindex(weights.index).ffill()
+
+    defensive = hold_weights(defensive)
+    static_blend = hold_weights(static_blend)
+    dynamic = hold_weights(dynamic)
+
     def net_return(weights: pd.DataFrame) -> pd.Series:
         turnover = weights.diff().abs().sum(axis=1).fillna(weights.abs().sum(axis=1))
         return (weights * future).sum(axis=1) - turnover * fee
@@ -532,6 +544,30 @@ def dynamic_growth_defense_evaluation(data: pd.DataFrame, fee: float = 0.001
             rows.append({"scope": "Calendar year", "period": str(year), "strategy": name,
                          "observations": len(period), **performance_metrics(period[name])})
     return returns, pd.DataFrame(rows)
+
+
+def dynamic_allocation_sensitivity(data: pd.DataFrame) -> pd.DataFrame:
+    """Stress the fixed dynamic rule across costs and rebalance intervals."""
+    rows = []
+    for fee in (0.0005, 0.001, 0.002):
+        for rebalance_every in (1, 2, 4):
+            _, summary = dynamic_growth_defense_evaluation(
+                data, fee=fee, rebalance_every=rebalance_every
+            )
+            if summary.empty:
+                continue
+            result = summary[(summary["scope"] == "Full history") &
+                             (summary["strategy"] == "dynamic_growth_defense")].iloc[0]
+            rows.append({
+                "fee": fee,
+                "rebalance_sessions": rebalance_every * 5,
+                "annual_return": result["annual_return"],
+                "volatility": result["volatility"],
+                "sharpe": result["sharpe"],
+                "drawdown": result["drawdown"],
+                "calmar": result["calmar"],
+            })
+    return pd.DataFrame(rows)
 
 
 def block_bootstrap_sharpe_difference(candidate: pd.Series, benchmark: pd.Series,
@@ -617,6 +653,7 @@ def render_report(results: pd.DataFrame, risk_results: pd.DataFrame,
                   diversified_results: pd.DataFrame,
                   dynamic_results: pd.DataFrame,
                   dynamic_uncertainty: pd.DataFrame,
+                  dynamic_sensitivity: pd.DataFrame,
                   coefficients: pd.Series, market_date: str) -> str:
     rows = "\n".join(f"| {name} | {value:+.4f} |" for name, value in coefficients.items())
     result_rows = "\n".join(
@@ -863,6 +900,17 @@ The aligned diversified history was unavailable.
             f"[{row.lower_95:+.2f}, {row.upper_95:+.2f}] | {row.probability_positive:.1%} |"
             for row in dynamic_uncertainty.itertuples(index=False)
         ) if not dynamic_uncertainty.empty else "| Not available | — | — | — |"
+        sensitivity_rows = "\n".join(
+            f"| {row.fee:.2%} | {int(row.rebalance_sessions)} sessions | "
+            f"{row.annual_return:.1%} | {row.sharpe:.2f} | {row.drawdown:.1%} |"
+            for row in dynamic_sensitivity.itertuples(index=False)
+        ) if not dynamic_sensitivity.empty else "| — | — | — | — | — |"
+        sensitivity_pass = (not dynamic_sensitivity.empty and
+                            (dynamic_sensitivity["annual_return"] > 0).all() and
+                            (dynamic_sensitivity["sharpe"] > 1.0).all() and
+                            (dynamic_sensitivity["drawdown"] > -0.20).all())
+        dynamic_pass = dynamic_pass and sensitivity_pass
+        dynamic_verdict = "PASS FOR PAPER TESTING" if dynamic_pass else "REJECTED AS A TRADING MODEL"
         dynamic_section = f"""## Dynamic Growth / Defense Candidate: {dynamic_verdict}
 
 - The dynamic strategy has the best yearly Sharpe in **{year_wins} / {len(pivot)}** years.
@@ -879,6 +927,14 @@ The aligned diversified history was unavailable.
 {uncertainty_rows}
 
 The resampling keeps four adjacent five-session observations together. A candidate passes only if every 95% interval remains above zero in addition to the chronological and yearly gates.
+
+### Cost and rebalance sensitivity
+
+| One-way cost | Rebalance interval | Annual return | Sharpe | Maximum drawdown |
+|---:|---:|---:|---:|---:|
+{sensitivity_rows}
+
+The candidate must remain profitable, above 1.0 Sharpe and within a 20% drawdown in every predeclared stress scenario.
 """
     return f"""# MarketLab Model Training — {market_date}
 
@@ -955,6 +1011,7 @@ def main() -> None:
     )
     dynamic_predictions, dynamic_results = dynamic_growth_defense_evaluation(data)
     dynamic_uncertainty = dynamic_allocation_uncertainty(dynamic_predictions)
+    dynamic_sensitivity = dynamic_allocation_sensitivity(data)
     coefficient_parts = []
     available_tickers = [ticker for ticker in TRAIN_TICKERS
                          if ticker in data.index.get_level_values("ticker_id")]
@@ -1048,9 +1105,12 @@ def main() -> None:
     dynamic_uncertainty.assign(market_date=market_date).to_csv(
         OUTPUT_DIR / "latest_dynamic_uncertainty.csv", index=False
     )
+    dynamic_sensitivity.assign(market_date=market_date).to_csv(
+        OUTPUT_DIR / "latest_dynamic_sensitivity.csv", index=False
+    )
     report = render_report(results, risk_results, context_results, portfolio_result,
                            regime_results, volatility_results, allocation_results, diversified_results,
-                           dynamic_results, dynamic_uncertainty,
+                           dynamic_results, dynamic_uncertainty, dynamic_sensitivity,
                            coefficients, market_date)
     (OUTPUT_DIR / "latest.md").write_text(report, encoding="utf-8")
     history = OUTPUT_DIR / "history"

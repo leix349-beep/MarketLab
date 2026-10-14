@@ -8,7 +8,7 @@ from model_training import (CONTEXT_FEATURES, FEATURES, RISK_FEATURES, build_con
                             regime_stability_evaluation, roc_auc, select_risk_threshold,
                             volatility_target_robustness, multi_asset_allocation_evaluation,
                             dynamic_growth_defense_evaluation, dynamic_allocation_uncertainty,
-                            block_bootstrap_sharpe_difference)
+                            block_bootstrap_sharpe_difference, dynamic_allocation_sensitivity)
 
 
 class ModelTrainingTests(unittest.TestCase):
@@ -200,6 +200,10 @@ class ModelTrainingTests(unittest.TestCase):
                          {"static_half_growth", "defensive_inverse_vol", "spy"})
         self.assertTrue((uncertainty["lower_95"] <= uncertainty["median"]).all())
         self.assertTrue((uncertainty["median"] <= uncertainty["upper_95"]).all())
+        sensitivity = dynamic_allocation_sensitivity(panel)
+        self.assertEqual(len(sensitivity), 9)
+        self.assertEqual(set(sensitivity["rebalance_sessions"]), {5, 10, 20})
+        self.assertTrue(np.isfinite(sensitivity.select_dtypes(include=["number"])).all().all())
 
     def test_block_bootstrap_detects_clear_sharpe_advantage(self):
         rng = np.random.default_rng(22)
