@@ -43,8 +43,8 @@ Chronological out-of-sample research result. This model does not place orders.
 | QQQ | 20.0% | 0.545 | 17.4% | 16.9% | 4.9% | 0.35 | 0.90 | -41.8% | -34.7% |
 | IWM | 19.8% | 0.437 | 2.6% | 6.7% | 6.5% | 0.40 | 0.63 | -35.2% | -31.2% |
 | XLK | 21.4% | 0.493 | 12.0% | 13.9% | 6.7% | 0.41 | 0.99 | -36.9% | -33.1% |
-| XLF | 15.5% | 0.501 | 3.3% | 3.4% | 11.5% | 0.69 | 0.90 | -33.8% | -25.6% |
-| XLE | 23.6% | 0.462 | 8.7% | 9.7% | 22.3% | 0.91 | 1.02 | -23.3% | -25.9% |
+| XLF | 15.6% | 0.504 | 3.7% | 3.7% | 12.3% | 0.73 | 0.90 | -30.6% | -25.6% |
+| XLE | 23.6% | 0.463 | 9.0% | 9.9% | 22.9% | 0.93 | 1.02 | -23.3% | -25.9% |
 
 ## Cross-Asset Risk Candidate: REJECTED AS A TRADING MODEL
 
@@ -60,8 +60,8 @@ Uses credit versus Treasuries, the dollar, gold, VIX, SPY trend and market bread
 | QQQ | 0.531 | 20.6% | 20.6% | 0.27 | 0.0% | 9.4% | 0.58 | 0.90 | -31.7% | -34.7% |
 | IWM | 0.447 | 23.7% | 21.5% | 0.34 | 8.1% | 13.5% | 0.76 | 0.63 | -25.3% | -31.2% |
 | XLK | 0.484 | 22.3% | 22.6% | 0.28 | 0.0% | 8.0% | 0.49 | 0.99 | -40.7% | -33.1% |
-| XLF | 0.545 | 40.7% | 37.6% | 0.28 | 4.1% | 1.4% | 0.17 | 0.90 | -31.5% | -25.6% |
-| XLE | 0.462 | 17.2% | 17.8% | 0.41 | 8.1% | 16.0% | 0.72 | 1.02 | -25.9% | -25.9% |
+| XLF | 0.549 | 42.1% | 38.1% | 0.28 | 4.1% | 2.6% | 0.26 | 0.90 | -26.3% | -25.6% |
+| XLE | 0.465 | 18.8% | 19.4% | 0.41 | 8.1% | 15.9% | 0.72 | 1.02 | -25.9% | -25.9% |
 
 
 ## Portfolio Regime Candidate: REJECTED AS A TRADING MODEL
@@ -169,6 +169,16 @@ This test uses SPY, IWM, long Treasuries, high-yield credit, gold and the U.S. d
 | Static Half Growth | 10.7% | 10.1% | 1.06 | -17.3% | 0.62 |
 | Defensive Inverse Vol | 6.1% | 5.2% | 1.17 | -9.6% | 0.63 |
 | Spy | 15.1% | 15.9% | 0.97 | -27.4% | 0.55 |
+
+### Paired block-bootstrap uncertainty
+
+| Benchmark | Median Sharpe difference | 95% interval | Probability difference > 0 |
+|---|---:|---:|---:|
+| Static Half Growth | +0.15 | [-0.12, +0.44] | 86.6% |
+| Defensive Inverse Vol | +0.05 | [-0.28, +0.39] | 61.6% |
+| Spy | +0.24 | [-0.08, +0.58] | 93.9% |
+
+The resampling keeps four adjacent five-session observations together. A candidate passes only if every 95% interval remains above zero in addition to the chronological and yearly gates.
 
 
 ## Latest standardized coefficients

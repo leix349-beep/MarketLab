@@ -7,7 +7,8 @@ from model_training import (CONTEXT_FEATURES, FEATURES, RISK_FEATURES, build_con
                             download_dataset, performance_metrics, portfolio_regime_evaluation,
                             regime_stability_evaluation, roc_auc, select_risk_threshold,
                             volatility_target_robustness, multi_asset_allocation_evaluation,
-                            dynamic_growth_defense_evaluation)
+                            dynamic_growth_defense_evaluation, dynamic_allocation_uncertainty,
+                            block_bootstrap_sharpe_difference)
 
 
 class ModelTrainingTests(unittest.TestCase):
@@ -194,6 +195,19 @@ class ModelTrainingTests(unittest.TestCase):
         self.assertFalse(returns.empty)
         self.assertTrue(returns["growth_share"].isin([0.0, 0.5]).all())
         self.assertEqual(len(summary[summary["scope"] == "Full history"]), 4)
+        uncertainty = dynamic_allocation_uncertainty(returns)
+        self.assertEqual(set(uncertainty["benchmark"]),
+                         {"static_half_growth", "defensive_inverse_vol", "spy"})
+        self.assertTrue((uncertainty["lower_95"] <= uncertainty["median"]).all())
+        self.assertTrue((uncertainty["median"] <= uncertainty["upper_95"]).all())
+
+    def test_block_bootstrap_detects_clear_sharpe_advantage(self):
+        rng = np.random.default_rng(22)
+        candidate = pd.Series(rng.normal(0.01, 0.01, 500))
+        benchmark = pd.Series(rng.normal(-0.005, 0.01, 500))
+        result = block_bootstrap_sharpe_difference(candidate, benchmark, samples=300)
+        self.assertGreater(result["lower_95"], 0)
+        self.assertGreater(result["probability_positive"], 0.95)
 
 
 if __name__ == "__main__":

@@ -534,6 +534,47 @@ def dynamic_growth_defense_evaluation(data: pd.DataFrame, fee: float = 0.001
     return returns, pd.DataFrame(rows)
 
 
+def block_bootstrap_sharpe_difference(candidate: pd.Series, benchmark: pd.Series,
+                                      samples: int = 1000, block_size: int = 4,
+                                      seed: int = 20261013) -> dict[str, float]:
+    """Paired circular-block bootstrap for five-session Sharpe differences."""
+    paired = pd.concat([candidate, benchmark], axis=1).dropna().to_numpy(dtype=float)
+    if len(paired) < block_size * 5:
+        raise ValueError("Too few paired observations for block bootstrap.")
+    rng = np.random.default_rng(seed)
+    differences = []
+    block_offsets = np.arange(block_size)
+    blocks_needed = int(np.ceil(len(paired) / block_size))
+
+    def sharpe(values: np.ndarray) -> float:
+        deviation = values.std(ddof=1)
+        return float(values.mean() / deviation * np.sqrt(252 / 5)) if deviation else 0.0
+
+    for _ in range(samples):
+        starts = rng.integers(0, len(paired), size=blocks_needed)
+        indices = ((starts[:, None] + block_offsets) % len(paired)).ravel()[:len(paired)]
+        draw = paired[indices]
+        differences.append(sharpe(draw[:, 0]) - sharpe(draw[:, 1]))
+    values = np.asarray(differences)
+    lower, median, upper = np.quantile(values, [0.025, 0.5, 0.975])
+    return {"lower_95": float(lower), "median": float(median), "upper_95": float(upper),
+            "probability_positive": float((values > 0).mean()), "samples": samples,
+            "block_size": block_size}
+
+
+def dynamic_allocation_uncertainty(returns: pd.DataFrame) -> pd.DataFrame:
+    """Quantify uncertainty in the dynamic candidate versus each baseline."""
+    if returns.empty or "dynamic_growth_defense" not in returns:
+        return pd.DataFrame()
+    rows = []
+    for benchmark in ("static_half_growth", "defensive_inverse_vol", "spy"):
+        result = block_bootstrap_sharpe_difference(
+            returns["dynamic_growth_defense"], returns[benchmark]
+        )
+        rows.append({"benchmark": benchmark, **result})
+    return pd.DataFrame(rows)
+
+
 def download_dataset() -> pd.DataFrame:
     parts = []
     frames: dict[str, pd.DataFrame] = {}
@@ -575,6 +616,7 @@ def render_report(results: pd.DataFrame, risk_results: pd.DataFrame,
                   allocation_results: pd.DataFrame,
                   diversified_results: pd.DataFrame,
                   dynamic_results: pd.DataFrame,
+                  dynamic_uncertainty: pd.DataFrame,
                   coefficients: pd.Series, market_date: str) -> str:
     rows = "\n".join(f"| {name} | {value:+.4f} |" for name, value in coefficients.items())
     result_rows = "\n".join(
@@ -804,16 +846,23 @@ The aligned diversified history was unavailable.
         alternatives = full[full["strategy"] != "dynamic_growth_defense"]
         pivot = yearly.pivot(index="period", columns="strategy", values="sharpe")
         year_wins = int((pivot["dynamic_growth_defense"] > pivot.drop(columns="dynamic_growth_defense").max(axis=1)).sum())
+        uncertainty_pass = (not dynamic_uncertainty.empty and
+                            (dynamic_uncertainty["lower_95"] > 0).all())
         dynamic_pass = (candidate["sharpe"] > alternatives["sharpe"].max() and
                         candidate["annual_return"] > 0 and
                         candidate["drawdown"] > full[full["strategy"] == "spy"]["drawdown"].iloc[0] and
-                        year_wins >= len(pivot) / 2)
+                        year_wins >= len(pivot) / 2 and uncertainty_pass)
         dynamic_verdict = "PASS FOR PAPER TESTING" if dynamic_pass else "REJECTED AS A TRADING MODEL"
         dynamic_rows = "\n".join(
             f"| {row.strategy.replace('_', ' ').title()} | {row.annual_return:.1%} | "
             f"{row.volatility:.1%} | {row.sharpe:.2f} | {row.drawdown:.1%} | {row.calmar:.2f} |"
             for row in full.itertuples(index=False)
         )
+        uncertainty_rows = "\n".join(
+            f"| {row.benchmark.replace('_', ' ').title()} | {row.median:+.2f} | "
+            f"[{row.lower_95:+.2f}, {row.upper_95:+.2f}] | {row.probability_positive:.1%} |"
+            for row in dynamic_uncertainty.itertuples(index=False)
+        ) if not dynamic_uncertainty.empty else "| Not available | — | — | — |"
         dynamic_section = f"""## Dynamic Growth / Defense Candidate: {dynamic_verdict}
 
 - The dynamic strategy has the best yearly Sharpe in **{year_wins} / {len(pivot)}** years.
@@ -822,6 +871,14 @@ The aligned diversified history was unavailable.
 | Portfolio | Annual return | Volatility | Sharpe | Maximum drawdown | Calmar |
 |---|---:|---:|---:|---:|---:|
 {dynamic_rows}
+
+### Paired block-bootstrap uncertainty
+
+| Benchmark | Median Sharpe difference | 95% interval | Probability difference > 0 |
+|---|---:|---:|---:|
+{uncertainty_rows}
+
+The resampling keeps four adjacent five-session observations together. A candidate passes only if every 95% interval remains above zero in addition to the chronological and yearly gates.
 """
     return f"""# MarketLab Model Training — {market_date}
 
@@ -897,6 +954,7 @@ def main() -> None:
         data, tickers=DIVERSIFIED_TICKERS
     )
     dynamic_predictions, dynamic_results = dynamic_growth_defense_evaluation(data)
+    dynamic_uncertainty = dynamic_allocation_uncertainty(dynamic_predictions)
     coefficient_parts = []
     available_tickers = [ticker for ticker in TRAIN_TICKERS
                          if ticker in data.index.get_level_values("ticker_id")]
@@ -987,9 +1045,12 @@ def main() -> None:
     dynamic_predictions.tail(200).to_csv(
         OUTPUT_DIR / "latest_dynamic_allocation_predictions.csv"
     )
+    dynamic_uncertainty.assign(market_date=market_date).to_csv(
+        OUTPUT_DIR / "latest_dynamic_uncertainty.csv", index=False
+    )
     report = render_report(results, risk_results, context_results, portfolio_result,
                            regime_results, volatility_results, allocation_results, diversified_results,
-                           dynamic_results,
+                           dynamic_results, dynamic_uncertainty,
                            coefficients, market_date)
     (OUTPUT_DIR / "latest.md").write_text(report, encoding="utf-8")
     history = OUTPUT_DIR / "history"
