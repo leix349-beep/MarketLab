@@ -44,7 +44,7 @@ Chronological out-of-sample research result. This model does not place orders.
 | IWM | 19.8% | 0.437 | 2.6% | 6.7% | 6.5% | 0.40 | 0.63 | -35.2% | -31.2% |
 | XLK | 21.4% | 0.493 | 12.0% | 13.9% | 6.7% | 0.41 | 0.99 | -36.9% | -33.1% |
 | XLF | 15.5% | 0.501 | 3.3% | 3.4% | 11.5% | 0.69 | 0.90 | -33.8% | -25.6% |
-| XLE | 23.6% | 0.462 | 8.7% | 9.7% | 22.3% | 0.91 | 1.02 | -23.3% | -25.9% |
+| XLE | 23.6% | 0.463 | 9.0% | 9.9% | 22.9% | 0.93 | 1.02 | -23.3% | -25.9% |
 
 ## Cross-Asset Risk Candidate: REJECTED AS A TRADING MODEL
 
@@ -52,7 +52,7 @@ Uses credit versus Treasuries, the dollar, gold, VIX, SPY trend and market bread
 
 - Assets with ROC AUC above 0.52: **3 / 6**
 - Assets with higher Sharpe than buy and hold: **1 / 6**
-- Assets with smaller maximum drawdown: **4 / 6**
+- Assets with smaller maximum drawdown: **3 / 6**
 
 | Asset | ROC AUC | Risk recall | Exit rate | Avg threshold | No-filter fallback | Ann. return | Model Sharpe | B&H Sharpe | Model DD | B&H DD |
 |---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
@@ -61,7 +61,7 @@ Uses credit versus Treasuries, the dollar, gold, VIX, SPY trend and market bread
 | IWM | 0.447 | 23.7% | 21.5% | 0.34 | 8.1% | 13.5% | 0.76 | 0.63 | -25.3% | -31.2% |
 | XLK | 0.484 | 22.3% | 22.6% | 0.28 | 0.0% | 8.0% | 0.49 | 0.99 | -40.7% | -33.1% |
 | XLF | 0.545 | 40.7% | 37.6% | 0.28 | 4.1% | 1.4% | 0.17 | 0.90 | -31.5% | -25.6% |
-| XLE | 0.462 | 17.2% | 17.8% | 0.41 | 8.1% | 16.0% | 0.72 | 1.02 | -25.9% | -25.9% |
+| XLE | 0.465 | 18.8% | 19.4% | 0.41 | 8.1% | 15.9% | 0.72 | 1.02 | -25.9% | -25.9% |
 
 
 ## Portfolio Regime Candidate: REJECTED AS A TRADING MODEL
@@ -207,14 +207,15 @@ The U.S.-designed rule is frozen and applied without retuning to developed ex-U.
 
 - Higher full-history Sharpe: **4 / 4** markets
 - Smaller maximum drawdown: **4 / 4** markets
+- Smaller average loss in the worst 5% of periods: **4 / 4** markets
 - Higher Sharpe in at least half of years: **3 / 4** markets
 
-| Market | Dynamic ann. return | Dynamic Sharpe | Dynamic DD | Market ann. return | Market Sharpe | Market DD | Years higher Sharpe |
-|---|---:|---:|---:|---:|---:|---:|---:|
-| EFA | 4.9% | 0.73 | -12.4% | 7.9% | 0.56 | -29.3% | 4 / 10 |
-| EEM | 5.8% | 0.72 | -15.0% | 7.0% | 0.46 | -38.6% | 5 / 10 |
-| EWJ | 6.6% | 0.85 | -14.7% | 8.6% | 0.58 | -32.5% | 5 / 10 |
-| VGK | 5.4% | 0.78 | -10.1% | 8.0% | 0.53 | -32.1% | 6 / 10 |
+| Market | Dynamic ann. return | Dynamic Sharpe | Dynamic DD | Dynamic tail loss | Market ann. return | Market Sharpe | Market DD | Market tail loss | Years higher Sharpe |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| EFA | 4.9% | 0.73 | -12.4% | -2.3% | 7.9% | 0.56 | -29.3% | -5.1% | 4 / 10 |
+| EEM | 5.8% | 0.72 | -15.0% | -2.8% | 7.0% | 0.46 | -38.6% | -5.9% | 5 / 10 |
+| EWJ | 6.6% | 0.85 | -14.7% | -2.5% | 8.6% | 0.58 | -32.5% | -5.0% | 5 / 10 |
+| VGK | 5.4% | 0.78 | -10.1% | -2.3% | 8.0% | 0.53 | -32.1% | -5.6% | 6 / 10 |
 
 
 ## Latest standardized coefficients

@@ -46,6 +46,8 @@ class ModelTrainingTests(unittest.TestCase):
         stats = performance_metrics(pd.Series([0.01, -0.02, 0.015, 0.0]))
         self.assertTrue(all(np.isfinite(value) for value in stats.values()))
         self.assertLessEqual(stats["drawdown"], 0)
+        self.assertEqual(stats["worst_return"], -0.02)
+        self.assertLessEqual(stats["expected_shortfall_5"], 0)
 
     def test_auc_and_downside_evaluation(self):
         self.assertAlmostEqual(roc_auc(pd.Series([0, 0, 1, 1]), pd.Series([0.1, 0.2, 0.8, 0.9])), 1.0)

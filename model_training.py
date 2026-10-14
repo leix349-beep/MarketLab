@@ -29,15 +29,23 @@ def performance_metrics(returns: pd.Series, periods_per_year: float = 252 / 5) -
     returns = returns.replace([np.inf, -np.inf], np.nan).dropna()
     if returns.empty:
         return {"return": 0.0, "annual_return": 0.0, "volatility": 0.0,
-                "sharpe": 0.0, "drawdown": 0.0, "calmar": 0.0}
+                "sharpe": 0.0, "drawdown": 0.0, "calmar": 0.0,
+                "sortino": 0.0, "expected_shortfall_5": 0.0, "worst_return": 0.0}
     wealth = (1 + returns).cumprod()
     drawdown = float((wealth / wealth.cummax() - 1).min())
     annual_return = float(wealth.iloc[-1] ** (periods_per_year / len(returns)) - 1)
     volatility = float(returns.std() * np.sqrt(periods_per_year))
     sharpe = float(returns.mean() / returns.std() * np.sqrt(periods_per_year)) if returns.std() else 0.0
     calmar = annual_return / abs(drawdown) if drawdown < 0 else 0.0
+    downside_deviation = float(np.sqrt(np.mean(np.minimum(returns, 0) ** 2)) *
+                               np.sqrt(periods_per_year))
+    sortino = float(returns.mean() * periods_per_year / downside_deviation) if downside_deviation else 0.0
+    tail_cutoff = returns.quantile(0.05)
+    expected_shortfall = float(returns[returns <= tail_cutoff].mean())
     return {"return": float(wealth.iloc[-1] - 1), "annual_return": annual_return,
-            "volatility": volatility, "sharpe": sharpe, "drawdown": drawdown, "calmar": calmar}
+            "volatility": volatility, "sharpe": sharpe, "drawdown": drawdown, "calmar": calmar,
+            "sortino": sortino, "expected_shortfall_5": expected_shortfall,
+            "worst_return": float(returns.min())}
 
 
 def build_features(frame: pd.DataFrame, horizon: int = 5) -> pd.DataFrame:
@@ -571,9 +579,15 @@ def external_market_validation(data: pd.DataFrame) -> pd.DataFrame:
             "dynamic_annual_return": full.loc["dynamic_growth_defense", "annual_return"],
             "dynamic_sharpe": full.loc["dynamic_growth_defense", "sharpe"],
             "dynamic_drawdown": full.loc["dynamic_growth_defense", "drawdown"],
+            "dynamic_sortino": full.loc["dynamic_growth_defense", "sortino"],
+            "dynamic_expected_shortfall_5": full.loc["dynamic_growth_defense", "expected_shortfall_5"],
+            "dynamic_worst_return": full.loc["dynamic_growth_defense", "worst_return"],
             "benchmark_annual_return": full.loc["spy", "annual_return"],
             "benchmark_sharpe": full.loc["spy", "sharpe"],
             "benchmark_drawdown": full.loc["spy", "drawdown"],
+            "benchmark_sortino": full.loc["spy", "sortino"],
+            "benchmark_expected_shortfall_5": full.loc["spy", "expected_shortfall_5"],
+            "benchmark_worst_return": full.loc["spy", "worst_return"],
             "years_higher_sharpe": int((yearly["dynamic_growth_defense"] > yearly["spy"]).sum()),
             "years_tested": int(len(yearly)),
         })
@@ -982,14 +996,18 @@ The required regional ETF histories were unavailable.
     else:
         sharpe_wins = int((external_results["dynamic_sharpe"] > external_results["benchmark_sharpe"]).sum())
         drawdown_wins = int((external_results["dynamic_drawdown"] > external_results["benchmark_drawdown"]).sum())
+        tail_wins = int((external_results["dynamic_expected_shortfall_5"] >
+                         external_results["benchmark_expected_shortfall_5"]).sum())
         majority_years = int((external_results["years_higher_sharpe"] * 2 >=
                               external_results["years_tested"]).sum())
-        external_pass = (sharpe_wins >= 3 and drawdown_wins >= 3 and majority_years >= 3)
+        external_pass = (sharpe_wins >= 3 and drawdown_wins >= 3 and
+                         tail_wins >= 3 and majority_years >= 3)
         external_verdict = "PASS" if external_pass else "FAIL"
         external_rows = "\n".join(
             f"| {row.market} | {row.dynamic_annual_return:.1%} | {row.dynamic_sharpe:.2f} | "
-            f"{row.dynamic_drawdown:.1%} | {row.benchmark_annual_return:.1%} | "
-            f"{row.benchmark_sharpe:.2f} | {row.benchmark_drawdown:.1%} | "
+            f"{row.dynamic_drawdown:.1%} | {row.dynamic_expected_shortfall_5:.1%} | "
+            f"{row.benchmark_annual_return:.1%} | {row.benchmark_sharpe:.2f} | "
+            f"{row.benchmark_drawdown:.1%} | {row.benchmark_expected_shortfall_5:.1%} | "
             f"{int(row.years_higher_sharpe)} / {int(row.years_tested)} |"
             for row in external_results.itertuples(index=False)
         )
@@ -999,10 +1017,11 @@ The U.S.-designed rule is frozen and applied without retuning to developed ex-U.
 
 - Higher full-history Sharpe: **{sharpe_wins} / {len(external_results)}** markets
 - Smaller maximum drawdown: **{drawdown_wins} / {len(external_results)}** markets
+- Smaller average loss in the worst 5% of periods: **{tail_wins} / {len(external_results)}** markets
 - Higher Sharpe in at least half of years: **{majority_years} / {len(external_results)}** markets
 
-| Market | Dynamic ann. return | Dynamic Sharpe | Dynamic DD | Market ann. return | Market Sharpe | Market DD | Years higher Sharpe |
-|---|---:|---:|---:|---:|---:|---:|---:|
+| Market | Dynamic ann. return | Dynamic Sharpe | Dynamic DD | Dynamic tail loss | Market ann. return | Market Sharpe | Market DD | Market tail loss | Years higher Sharpe |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|
 {external_rows}
 """
     return f"""# MarketLab Model Training — {market_date}
