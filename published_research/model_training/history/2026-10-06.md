@@ -43,8 +43,8 @@ Chronological out-of-sample research result. This model does not place orders.
 | QQQ | 20.0% | 0.545 | 17.4% | 16.9% | 4.9% | 0.35 | 0.90 | -41.8% | -34.7% |
 | IWM | 19.8% | 0.437 | 2.6% | 6.7% | 6.5% | 0.40 | 0.63 | -35.2% | -31.2% |
 | XLK | 21.4% | 0.493 | 12.0% | 13.9% | 6.7% | 0.41 | 0.99 | -36.9% | -33.1% |
-| XLF | 15.6% | 0.504 | 3.7% | 3.7% | 12.3% | 0.73 | 0.90 | -30.6% | -25.6% |
-| XLE | 23.6% | 0.463 | 9.0% | 9.9% | 22.9% | 0.93 | 1.02 | -23.3% | -25.9% |
+| XLF | 15.5% | 0.501 | 3.3% | 3.4% | 11.5% | 0.69 | 0.90 | -33.8% | -25.6% |
+| XLE | 23.6% | 0.462 | 8.7% | 9.7% | 22.3% | 0.91 | 1.02 | -23.3% | -25.9% |
 
 ## Cross-Asset Risk Candidate: REJECTED AS A TRADING MODEL
 
@@ -52,7 +52,7 @@ Uses credit versus Treasuries, the dollar, gold, VIX, SPY trend and market bread
 
 - Assets with ROC AUC above 0.52: **3 / 6**
 - Assets with higher Sharpe than buy and hold: **1 / 6**
-- Assets with smaller maximum drawdown: **3 / 6**
+- Assets with smaller maximum drawdown: **4 / 6**
 
 | Asset | ROC AUC | Risk recall | Exit rate | Avg threshold | No-filter fallback | Ann. return | Model Sharpe | B&H Sharpe | Model DD | B&H DD |
 |---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
@@ -60,8 +60,8 @@ Uses credit versus Treasuries, the dollar, gold, VIX, SPY trend and market bread
 | QQQ | 0.531 | 20.6% | 20.6% | 0.27 | 0.0% | 9.4% | 0.58 | 0.90 | -31.7% | -34.7% |
 | IWM | 0.447 | 23.7% | 21.5% | 0.34 | 8.1% | 13.5% | 0.76 | 0.63 | -25.3% | -31.2% |
 | XLK | 0.484 | 22.3% | 22.6% | 0.28 | 0.0% | 8.0% | 0.49 | 0.99 | -40.7% | -33.1% |
-| XLF | 0.549 | 42.1% | 38.1% | 0.28 | 4.1% | 2.6% | 0.26 | 0.90 | -26.3% | -25.6% |
-| XLE | 0.465 | 18.8% | 19.4% | 0.41 | 8.1% | 15.9% | 0.72 | 1.02 | -25.9% | -25.9% |
+| XLF | 0.545 | 40.7% | 37.6% | 0.28 | 4.1% | 1.4% | 0.17 | 0.90 | -31.5% | -25.6% |
+| XLE | 0.462 | 17.2% | 17.8% | 0.41 | 8.1% | 16.0% | 0.72 | 1.02 | -25.9% | -25.9% |
 
 
 ## Portfolio Regime Candidate: REJECTED AS A TRADING MODEL
@@ -99,12 +99,15 @@ States use information available on each decision date: SPY MA20/60 trend, VIX 2
 
 ## Volatility-Target Robustness: NOT YET ROBUST
 
-- Higher Sharpe across assets: **6 / 10**
-- Smaller drawdown across assets: **10 / 10**
-- Higher Sharpe across calendar years: **2 / 10**
+- Higher Sharpe across assets: **6 / 14**
+- Smaller drawdown across assets: **14 / 14**
+- Higher Sharpe across calendar years: **0 / 10**
 
 | Scope | Asset / period | Observations | Vol-target ann. return | Vol-target Sharpe | Vol-target DD | B&H ann. return | B&H Sharpe | B&H DD |
 |---|---|---:|---:|---:|---:|---:|---:|---:|
+| Asset | EEM | 489 | 5.4% | 0.48 | -28.4% | 8.8% | 0.54 | -38.5% |
+| Asset | EFA | 489 | 4.8% | 0.46 | -23.5% | 9.0% | 0.60 | -33.4% |
+| Asset | EWJ | 489 | 5.7% | 0.53 | -23.6% | 9.1% | 0.61 | -32.7% |
 | Asset | GLD | 489 | 11.3% | 0.90 | -18.7% | 13.1% | 0.84 | -22.6% |
 | Asset | HYG | 489 | 3.8% | 0.58 | -15.6% | 4.2% | 0.49 | -20.8% |
 | Asset | IWM | 489 | 3.5% | 0.34 | -22.6% | 9.0% | 0.50 | -40.0% |
@@ -112,19 +115,20 @@ States use information available on each decision date: SPY MA20/60 trend, VIX 2
 | Asset | SPY | 489 | 11.5% | 1.02 | -15.7% | 15.3% | 0.94 | -31.7% |
 | Asset | TLT | 489 | -1.4% | -0.07 | -41.1% | -1.8% | -0.06 | -47.4% |
 | Asset | UUP | 489 | 3.1% | 0.49 | -12.6% | 3.0% | 0.47 | -13.9% |
+| Asset | VGK | 489 | 4.7% | 0.44 | -24.2% | 9.4% | 0.58 | -36.6% |
 | Asset | XLE | 489 | 2.3% | 0.24 | -41.3% | 10.1% | 0.49 | -63.9% |
 | Asset | XLF | 489 | 5.9% | 0.51 | -21.0% | 10.9% | 0.60 | -39.3% |
 | Asset | XLK | 489 | 15.3% | 1.24 | -13.6% | 25.3% | 1.11 | -32.3% |
-| Calendar year | 2017 | 49 | 13.2% | 2.91 | -1.4% | 14.4% | 3.00 | -1.5% |
-| Calendar year | 2018 | 50 | -4.8% | -0.62 | -7.6% | -6.7% | -0.59 | -11.1% |
-| Calendar year | 2019 | 51 | 16.3% | 3.09 | -3.0% | 25.9% | 3.19 | -3.7% |
-| Calendar year | 2020 | 50 | 3.1% | 0.37 | -10.0% | 13.4% | 0.66 | -24.8% |
-| Calendar year | 2021 | 51 | 9.6% | 1.90 | -2.1% | 18.0% | 2.18 | -2.2% |
-| Calendar year | 2022 | 50 | -4.9% | -0.56 | -8.7% | -7.3% | -0.33 | -15.4% |
-| Calendar year | 2023 | 50 | 9.2% | 1.23 | -5.3% | 15.3% | 1.44 | -6.3% |
-| Calendar year | 2024 | 50 | 14.3% | 1.97 | -3.4% | 19.3% | 1.89 | -5.0% |
-| Calendar year | 2025 | 50 | 11.5% | 1.68 | -5.6% | 17.7% | 1.67 | -9.0% |
-| Calendar year | 2026 | 38 | 7.8% | 1.56 | -2.0% | 14.8% | 1.87 | -2.7% |
+| Calendar year | 2017 | 49 | 17.0% | 3.27 | -1.4% | 18.3% | 3.36 | -1.4% |
+| Calendar year | 2018 | 50 | -8.1% | -0.93 | -11.3% | -9.9% | -0.83 | -12.9% |
+| Calendar year | 2019 | 51 | 16.0% | 2.50 | -3.6% | 24.9% | 2.74 | -4.2% |
+| Calendar year | 2020 | 50 | 2.8% | 0.32 | -11.6% | 13.6% | 0.65 | -26.3% |
+| Calendar year | 2021 | 51 | 7.6% | 1.33 | -2.3% | 14.1% | 1.66 | -2.5% |
+| Calendar year | 2022 | 50 | -7.0% | -0.71 | -12.1% | -9.1% | -0.40 | -18.6% |
+| Calendar year | 2023 | 50 | 8.4% | 1.01 | -6.3% | 14.1% | 1.28 | -7.4% |
+| Calendar year | 2024 | 50 | 11.3% | 1.45 | -4.3% | 15.7% | 1.49 | -5.8% |
+| Calendar year | 2025 | 50 | 15.1% | 2.04 | -4.7% | 22.6% | 2.07 | -7.4% |
+| Calendar year | 2026 | 38 | 8.2% | 1.36 | -2.9% | 15.3% | 1.59 | -4.5% |
 
 The 12% target is fixed before evaluation. Weights use only trailing volatility, five-day returns do not overlap, and 0.10% turnover cost is deducted.
 
@@ -195,6 +199,22 @@ The resampling keeps four adjacent five-session observations together. A candida
 | 0.20% | 20 sessions | 9.0% | 1.08 | -17.2% |
 
 The candidate must remain profitable, above 1.0 Sharpe and within a 20% drawdown in every predeclared stress scenario.
+
+
+## External-Market Validation: PASS
+
+The U.S.-designed rule is frozen and applied without retuning to developed ex-U.S., emerging markets, Japan and Europe.
+
+- Higher full-history Sharpe: **4 / 4** markets
+- Smaller maximum drawdown: **4 / 4** markets
+- Higher Sharpe in at least half of years: **3 / 4** markets
+
+| Market | Dynamic ann. return | Dynamic Sharpe | Dynamic DD | Market ann. return | Market Sharpe | Market DD | Years higher Sharpe |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| EFA | 4.9% | 0.73 | -12.4% | 7.9% | 0.56 | -29.3% | 4 / 10 |
+| EEM | 5.8% | 0.72 | -15.0% | 7.0% | 0.46 | -38.6% | 5 / 10 |
+| EWJ | 6.6% | 0.85 | -14.7% | 8.6% | 0.58 | -32.5% | 5 / 10 |
+| VGK | 5.4% | 0.78 | -10.1% | 8.0% | 0.53 | -32.1% | 6 / 10 |
 
 
 ## Latest standardized coefficients

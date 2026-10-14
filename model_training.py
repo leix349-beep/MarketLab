@@ -13,6 +13,7 @@ import yfinance as yf
 
 TRAIN_TICKERS = ("SPY", "QQQ", "IWM", "XLK", "XLF", "XLE")
 DIVERSIFIED_TICKERS = ("SPY", "IWM", "TLT", "HYG", "GLD", "UUP")
+EXTERNAL_GROWTH_TICKERS = ("EFA", "EEM", "EWJ", "VGK")
 FEATURES = ("ret_5", "ret_21", "ma_gap", "rsi14", "vol_21", "drawdown_63")
 RISK_FEATURES = FEATURES + ("ret_63", "ma200_gap", "vol_ratio", "downside_vol_21")
 CONTEXT_TICKERS = ("TLT", "HYG", "UUP", "GLD", "^VIX")
@@ -484,7 +485,9 @@ def multi_asset_allocation_evaluation(data: pd.DataFrame, fee: float = 0.001,
 
 
 def dynamic_growth_defense_evaluation(data: pd.DataFrame, fee: float = 0.001,
-                                      rebalance_every: int = 1
+                                      rebalance_every: int = 1,
+                                      tickers: tuple[str, ...] = DIVERSIFIED_TICKERS,
+                                      growth_ticker: str = "SPY"
                                       ) -> tuple[pd.DataFrame, pd.DataFrame]:
     """Switch a fixed growth sleeve into a diversified defensive sleeve."""
     if rebalance_every < 1:
@@ -492,9 +495,10 @@ def dynamic_growth_defense_evaluation(data: pd.DataFrame, fee: float = 0.001,
     required = {"future_return", "vol_21", "ret_63", "ma200_gap"}
     if not required.issubset(data.columns):
         raise ValueError("Dynamic allocation is missing required observable features.")
-    tickers = [ticker for ticker in DIVERSIFIED_TICKERS
+    expected_tickers = tuple(tickers)
+    tickers = [ticker for ticker in expected_tickers
                if ticker in data.index.get_level_values("ticker_id")]
-    if set(tickers) != set(DIVERSIFIED_TICKERS):
+    if set(tickers) != set(expected_tickers) or growth_ticker not in tickers:
         return pd.DataFrame(), pd.DataFrame()
     panels = {column: data[column].unstack("ticker_id").reindex(columns=tickers)
               for column in required}
@@ -506,10 +510,10 @@ def dynamic_growth_defense_evaluation(data: pd.DataFrame, fee: float = 0.001,
     inverse_vol = 1 / panels["vol_21"].loc[dates].replace(0, np.nan)
     defensive = inverse_vol.div(inverse_vol.sum(axis=1), axis=0).fillna(0)
     growth = pd.DataFrame(0.0, index=dates, columns=tickers)
-    growth["SPY"] = 1.0
+    growth[growth_ticker] = 1.0
     static_blend = 0.5 * growth + 0.5 * defensive
-    positive_trend = ((panels["ret_63"].loc[dates, "SPY"] > 0) &
-                      (panels["ma200_gap"].loc[dates, "SPY"] > 0)).astype(float)
+    positive_trend = ((panels["ret_63"].loc[dates, growth_ticker] > 0) &
+                      (panels["ma200_gap"].loc[dates, growth_ticker] > 0)).astype(float)
     growth_share = positive_trend * 0.5
     dynamic = defensive.mul(1 - growth_share, axis=0) + growth.mul(growth_share, axis=0)
 
@@ -530,7 +534,7 @@ def dynamic_growth_defense_evaluation(data: pd.DataFrame, fee: float = 0.001,
         "dynamic_growth_defense": net_return(dynamic),
         "static_half_growth": net_return(static_blend),
         "defensive_inverse_vol": net_return(defensive),
-        "spy": future["SPY"],
+        "spy": future[growth_ticker],
         "growth_share": growth_share,
     })
     rows = []
@@ -544,6 +548,36 @@ def dynamic_growth_defense_evaluation(data: pd.DataFrame, fee: float = 0.001,
             rows.append({"scope": "Calendar year", "period": str(year), "strategy": name,
                          "observations": len(period), **performance_metrics(period[name])})
     return returns, pd.DataFrame(rows)
+
+
+def external_market_validation(data: pd.DataFrame) -> pd.DataFrame:
+    """Apply the frozen growth/defense rule to previously unused equity regions."""
+    rows = []
+    defensive_assets = ("TLT", "HYG", "GLD", "UUP")
+    for growth_ticker in EXTERNAL_GROWTH_TICKERS:
+        universe = (growth_ticker, *defensive_assets)
+        _, summary = dynamic_growth_defense_evaluation(
+            data, tickers=universe, growth_ticker=growth_ticker
+        )
+        if summary.empty:
+            continue
+        full = summary[summary["scope"] == "Full history"].set_index("strategy")
+        yearly = summary[summary["scope"] == "Calendar year"].pivot(
+            index="period", columns="strategy", values="sharpe"
+        )
+        rows.append({
+            "market": growth_ticker,
+            "observations": int(full.loc["dynamic_growth_defense", "observations"]),
+            "dynamic_annual_return": full.loc["dynamic_growth_defense", "annual_return"],
+            "dynamic_sharpe": full.loc["dynamic_growth_defense", "sharpe"],
+            "dynamic_drawdown": full.loc["dynamic_growth_defense", "drawdown"],
+            "benchmark_annual_return": full.loc["spy", "annual_return"],
+            "benchmark_sharpe": full.loc["spy", "sharpe"],
+            "benchmark_drawdown": full.loc["spy", "drawdown"],
+            "years_higher_sharpe": int((yearly["dynamic_growth_defense"] > yearly["spy"]).sum()),
+            "years_tested": int(len(yearly)),
+        })
+    return pd.DataFrame(rows)
 
 
 def dynamic_allocation_sensitivity(data: pd.DataFrame) -> pd.DataFrame:
@@ -614,7 +648,9 @@ def dynamic_allocation_uncertainty(returns: pd.DataFrame) -> pd.DataFrame:
 def download_dataset() -> pd.DataFrame:
     parts = []
     frames: dict[str, pd.DataFrame] = {}
-    for ticker in (*TRAIN_TICKERS, *CONTEXT_TICKERS):
+    download_tickers = tuple(dict.fromkeys((*TRAIN_TICKERS, *CONTEXT_TICKERS,
+                                           *EXTERNAL_GROWTH_TICKERS)))
+    for ticker in download_tickers:
         frame = yf.download(ticker, period="10y", auto_adjust=True, progress=False)
         if isinstance(frame.columns, pd.MultiIndex):
             frame.columns = frame.columns.get_level_values(0)
@@ -623,7 +659,8 @@ def download_dataset() -> pd.DataFrame:
             continue
         frames[ticker] = frame
     context = build_context_features(frames)
-    research_tickers = tuple(dict.fromkeys((*TRAIN_TICKERS, *DIVERSIFIED_TICKERS)))
+    research_tickers = tuple(dict.fromkeys((*TRAIN_TICKERS, *DIVERSIFIED_TICKERS,
+                                           *EXTERNAL_GROWTH_TICKERS)))
     for ticker in research_tickers:
         if ticker not in frames:
             continue
@@ -654,6 +691,7 @@ def render_report(results: pd.DataFrame, risk_results: pd.DataFrame,
                   dynamic_results: pd.DataFrame,
                   dynamic_uncertainty: pd.DataFrame,
                   dynamic_sensitivity: pd.DataFrame,
+                  external_results: pd.DataFrame,
                   coefficients: pd.Series, market_date: str) -> str:
     rows = "\n".join(f"| {name} | {value:+.4f} |" for name, value in coefficients.items())
     result_rows = "\n".join(
@@ -936,6 +974,37 @@ The resampling keeps four adjacent five-session observations together. A candida
 
 The candidate must remain profitable, above 1.0 Sharpe and within a 20% drawdown in every predeclared stress scenario.
 """
+    if external_results.empty:
+        external_section = """## External-Market Validation: NOT RUN
+
+The required regional ETF histories were unavailable.
+"""
+    else:
+        sharpe_wins = int((external_results["dynamic_sharpe"] > external_results["benchmark_sharpe"]).sum())
+        drawdown_wins = int((external_results["dynamic_drawdown"] > external_results["benchmark_drawdown"]).sum())
+        majority_years = int((external_results["years_higher_sharpe"] * 2 >=
+                              external_results["years_tested"]).sum())
+        external_pass = (sharpe_wins >= 3 and drawdown_wins >= 3 and majority_years >= 3)
+        external_verdict = "PASS" if external_pass else "FAIL"
+        external_rows = "\n".join(
+            f"| {row.market} | {row.dynamic_annual_return:.1%} | {row.dynamic_sharpe:.2f} | "
+            f"{row.dynamic_drawdown:.1%} | {row.benchmark_annual_return:.1%} | "
+            f"{row.benchmark_sharpe:.2f} | {row.benchmark_drawdown:.1%} | "
+            f"{int(row.years_higher_sharpe)} / {int(row.years_tested)} |"
+            for row in external_results.itertuples(index=False)
+        )
+        external_section = f"""## External-Market Validation: {external_verdict}
+
+The U.S.-designed rule is frozen and applied without retuning to developed ex-U.S., emerging markets, Japan and Europe.
+
+- Higher full-history Sharpe: **{sharpe_wins} / {len(external_results)}** markets
+- Smaller maximum drawdown: **{drawdown_wins} / {len(external_results)}** markets
+- Higher Sharpe in at least half of years: **{majority_years} / {len(external_results)}** markets
+
+| Market | Dynamic ann. return | Dynamic Sharpe | Dynamic DD | Market ann. return | Market Sharpe | Market DD | Years higher Sharpe |
+|---|---:|---:|---:|---:|---:|---:|---:|
+{external_rows}
+"""
     return f"""# MarketLab Model Training — {market_date}
 
 Chronological out-of-sample research result. This model does not place orders.
@@ -983,6 +1052,8 @@ Chronological out-of-sample research result. This model does not place orders.
 
 {dynamic_section}
 
+{external_section}
+
 ## Latest standardized coefficients
 
 | Feature | Coefficient |
@@ -1012,6 +1083,7 @@ def main() -> None:
     dynamic_predictions, dynamic_results = dynamic_growth_defense_evaluation(data)
     dynamic_uncertainty = dynamic_allocation_uncertainty(dynamic_predictions)
     dynamic_sensitivity = dynamic_allocation_sensitivity(data)
+    external_results = external_market_validation(data)
     coefficient_parts = []
     available_tickers = [ticker for ticker in TRAIN_TICKERS
                          if ticker in data.index.get_level_values("ticker_id")]
@@ -1108,9 +1180,12 @@ def main() -> None:
     dynamic_sensitivity.assign(market_date=market_date).to_csv(
         OUTPUT_DIR / "latest_dynamic_sensitivity.csv", index=False
     )
+    external_results.assign(market_date=market_date).to_csv(
+        OUTPUT_DIR / "latest_external_validation.csv", index=False
+    )
     report = render_report(results, risk_results, context_results, portfolio_result,
                            regime_results, volatility_results, allocation_results, diversified_results,
-                           dynamic_results, dynamic_uncertainty, dynamic_sensitivity,
+                           dynamic_results, dynamic_uncertainty, dynamic_sensitivity, external_results,
                            coefficients, market_date)
     (OUTPUT_DIR / "latest.md").write_text(report, encoding="utf-8")
     history = OUTPUT_DIR / "history"

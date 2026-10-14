@@ -8,7 +8,8 @@ from model_training import (CONTEXT_FEATURES, FEATURES, RISK_FEATURES, build_con
                             regime_stability_evaluation, roc_auc, select_risk_threshold,
                             volatility_target_robustness, multi_asset_allocation_evaluation,
                             dynamic_growth_defense_evaluation, dynamic_allocation_uncertainty,
-                            block_bootstrap_sharpe_difference, dynamic_allocation_sensitivity)
+                            block_bootstrap_sharpe_difference, dynamic_allocation_sensitivity,
+                            external_market_validation)
 
 
 class ModelTrainingTests(unittest.TestCase):
@@ -212,6 +213,25 @@ class ModelTrainingTests(unittest.TestCase):
         result = block_bootstrap_sharpe_difference(candidate, benchmark, samples=300)
         self.assertGreater(result["lower_95"], 0)
         self.assertGreater(result["probability_positive"], 0.95)
+
+    def test_external_validation_keeps_frozen_rule(self):
+        dates = pd.bdate_range("2017-01-01", periods=1800)
+        tickers = ("EFA", "EEM", "EWJ", "VGK", "TLT", "HYG", "GLD", "UUP")
+        parts = []
+        for offset, ticker in enumerate(tickers):
+            frame = pd.DataFrame({
+                "future_return": np.sin(np.arange(len(dates)) / (21 + offset)) * 0.01,
+                "vol_21": 0.08 + offset * 0.01,
+                "ret_63": np.sin(np.arange(len(dates)) / 45),
+                "ma200_gap": np.cos(np.arange(len(dates)) / 55),
+                "ticker_id": ticker,
+            }, index=dates)
+            parts.append(frame.set_index("ticker_id", append=True))
+        panel = pd.concat(parts)
+        panel.index.names = ["date", "ticker_id"]
+        result = external_market_validation(panel)
+        self.assertEqual(set(result["market"]), {"EFA", "EEM", "EWJ", "VGK"})
+        self.assertTrue((result["years_tested"] >= 5).all())
 
 
 if __name__ == "__main__":
