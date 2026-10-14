@@ -44,7 +44,7 @@ Chronological out-of-sample research result. This model does not place orders.
 | IWM | 19.8% | 0.437 | 2.6% | 6.7% | 6.5% | 0.40 | 0.63 | -35.2% | -31.2% |
 | XLK | 21.4% | 0.493 | 12.0% | 13.9% | 6.7% | 0.41 | 0.99 | -36.9% | -33.1% |
 | XLF | 15.5% | 0.501 | 3.3% | 3.4% | 11.5% | 0.69 | 0.90 | -33.8% | -25.6% |
-| XLE | 23.6% | 0.463 | 9.0% | 9.9% | 22.9% | 0.93 | 1.02 | -23.3% | -25.9% |
+| XLE | 23.6% | 0.462 | 8.7% | 9.7% | 22.3% | 0.91 | 1.02 | -23.3% | -25.9% |
 
 ## Cross-Asset Risk Candidate: REJECTED AS A TRADING MODEL
 
@@ -61,7 +61,7 @@ Uses credit versus Treasuries, the dollar, gold, VIX, SPY trend and market bread
 | IWM | 0.447 | 23.7% | 21.5% | 0.34 | 8.1% | 13.5% | 0.76 | 0.63 | -25.3% | -31.2% |
 | XLK | 0.484 | 22.3% | 22.6% | 0.28 | 0.0% | 8.0% | 0.49 | 0.99 | -40.7% | -33.1% |
 | XLF | 0.545 | 40.7% | 37.6% | 0.28 | 4.1% | 1.4% | 0.17 | 0.90 | -31.5% | -25.6% |
-| XLE | 0.465 | 18.8% | 19.4% | 0.41 | 8.1% | 15.9% | 0.72 | 1.02 | -25.9% | -25.9% |
+| XLE | 0.462 | 17.2% | 17.8% | 0.41 | 8.1% | 16.0% | 0.72 | 1.02 | -25.9% | -25.9% |
 
 
 ## Portfolio Regime Candidate: REJECTED AS A TRADING MODEL
@@ -155,6 +155,19 @@ This test uses SPY, IWM, long Treasuries, high-yield credit, gold and the U.S. d
 | Trend Risk Parity | 6.2% | 7.5% | 0.84 | -9.2% | 0.68 |
 | Inverse Volatility | 6.1% | 5.2% | 1.17 | -9.6% | 0.63 |
 | Equal Weight | 7.8% | 8.0% | 0.98 | -16.1% | 0.49 |
+| Spy | 15.1% | 15.9% | 0.97 | -27.4% | 0.55 |
+
+
+## Dynamic Growth / Defense Candidate: REJECTED AS A TRADING MODEL
+
+- The dynamic strategy has the best yearly Sharpe in **1 / 10** years.
+- When SPY's 63-day return and price-versus-200-day average are positive, growth receives 50%; otherwise the diversified defensive sleeve receives 100%.
+
+| Portfolio | Annual return | Volatility | Sharpe | Maximum drawdown | Calmar |
+|---|---:|---:|---:|---:|---:|
+| Dynamic Growth Defense | 9.6% | 7.7% | 1.22 | -12.4% | 0.78 |
+| Static Half Growth | 10.7% | 10.1% | 1.06 | -17.3% | 0.62 |
+| Defensive Inverse Vol | 6.1% | 5.2% | 1.17 | -9.6% | 0.63 |
 | Spy | 15.1% | 15.9% | 0.97 | -27.4% | 0.55 |
 
 

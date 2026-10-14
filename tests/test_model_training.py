@@ -6,7 +6,8 @@ from model_training import (CONTEXT_FEATURES, FEATURES, RISK_FEATURES, build_con
                             build_features, chronological_evaluation, downside_risk_evaluation,
                             download_dataset, performance_metrics, portfolio_regime_evaluation,
                             regime_stability_evaluation, roc_auc, select_risk_threshold,
-                            volatility_target_robustness, multi_asset_allocation_evaluation)
+                            volatility_target_robustness, multi_asset_allocation_evaluation,
+                            dynamic_growth_defense_evaluation)
 
 
 class ModelTrainingTests(unittest.TestCase):
@@ -174,6 +175,25 @@ class ModelTrainingTests(unittest.TestCase):
         )
         self.assertFalse(diversified_returns.empty)
         self.assertEqual(len(diversified_summary[diversified_summary["scope"] == "Full history"]), 4)
+
+    def test_dynamic_growth_defense_is_fully_invested(self):
+        dates = pd.bdate_range("2017-01-01", periods=1800)
+        parts = []
+        for offset, ticker in enumerate(("SPY", "IWM", "TLT", "HYG", "GLD", "UUP")):
+            frame = pd.DataFrame({
+                "future_return": np.sin(np.arange(len(dates)) / (20 + offset)) * 0.01,
+                "vol_21": 0.08 + offset * 0.02,
+                "ret_63": np.sin(np.arange(len(dates)) / 45),
+                "ma200_gap": np.cos(np.arange(len(dates)) / 55),
+                "ticker_id": ticker,
+            }, index=dates)
+            parts.append(frame.set_index("ticker_id", append=True))
+        panel = pd.concat(parts)
+        panel.index.names = ["date", "ticker_id"]
+        returns, summary = dynamic_growth_defense_evaluation(panel)
+        self.assertFalse(returns.empty)
+        self.assertTrue(returns["growth_share"].isin([0.0, 0.5]).all())
+        self.assertEqual(len(summary[summary["scope"] == "Full history"]), 4)
 
 
 if __name__ == "__main__":

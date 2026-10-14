@@ -483,6 +483,57 @@ def multi_asset_allocation_evaluation(data: pd.DataFrame, fee: float = 0.001,
     return returns, pd.DataFrame(rows)
 
 
+def dynamic_growth_defense_evaluation(data: pd.DataFrame, fee: float = 0.001
+                                      ) -> tuple[pd.DataFrame, pd.DataFrame]:
+    """Switch a fixed growth sleeve into a diversified defensive sleeve."""
+    required = {"future_return", "vol_21", "ret_63", "ma200_gap"}
+    if not required.issubset(data.columns):
+        raise ValueError("Dynamic allocation is missing required observable features.")
+    tickers = [ticker for ticker in DIVERSIFIED_TICKERS
+               if ticker in data.index.get_level_values("ticker_id")]
+    if set(tickers) != set(DIVERSIFIED_TICKERS):
+        return pd.DataFrame(), pd.DataFrame()
+    panels = {column: data[column].unstack("ticker_id").reindex(columns=tickers)
+              for column in required}
+    valid = pd.concat(panels, axis=1).dropna()
+    if valid.empty:
+        return pd.DataFrame(), pd.DataFrame()
+    dates = valid.index[::5]
+    future = panels["future_return"].loc[dates]
+    inverse_vol = 1 / panels["vol_21"].loc[dates].replace(0, np.nan)
+    defensive = inverse_vol.div(inverse_vol.sum(axis=1), axis=0).fillna(0)
+    growth = pd.DataFrame(0.0, index=dates, columns=tickers)
+    growth["SPY"] = 1.0
+    static_blend = 0.5 * growth + 0.5 * defensive
+    positive_trend = ((panels["ret_63"].loc[dates, "SPY"] > 0) &
+                      (panels["ma200_gap"].loc[dates, "SPY"] > 0)).astype(float)
+    growth_share = positive_trend * 0.5
+    dynamic = defensive.mul(1 - growth_share, axis=0) + growth.mul(growth_share, axis=0)
+
+    def net_return(weights: pd.DataFrame) -> pd.Series:
+        turnover = weights.diff().abs().sum(axis=1).fillna(weights.abs().sum(axis=1))
+        return (weights * future).sum(axis=1) - turnover * fee
+
+    returns = pd.DataFrame({
+        "dynamic_growth_defense": net_return(dynamic),
+        "static_half_growth": net_return(static_blend),
+        "defensive_inverse_vol": net_return(defensive),
+        "spy": future["SPY"],
+        "growth_share": growth_share,
+    })
+    rows = []
+    for name in ("dynamic_growth_defense", "static_half_growth", "defensive_inverse_vol", "spy"):
+        rows.append({"scope": "Full history", "period": "All", "strategy": name,
+                     "observations": len(returns), **performance_metrics(returns[name])})
+    for year, period in returns.groupby(returns.index.year):
+        if len(period) < 20:
+            continue
+        for name in ("dynamic_growth_defense", "static_half_growth", "defensive_inverse_vol", "spy"):
+            rows.append({"scope": "Calendar year", "period": str(year), "strategy": name,
+                         "observations": len(period), **performance_metrics(period[name])})
+    return returns, pd.DataFrame(rows)
+
+
 def download_dataset() -> pd.DataFrame:
     parts = []
     frames: dict[str, pd.DataFrame] = {}
@@ -523,6 +574,7 @@ def render_report(results: pd.DataFrame, risk_results: pd.DataFrame,
                   volatility_results: pd.DataFrame,
                   allocation_results: pd.DataFrame,
                   diversified_results: pd.DataFrame,
+                  dynamic_results: pd.DataFrame,
                   coefficients: pd.Series, market_date: str) -> str:
     rows = "\n".join(f"| {name} | {value:+.4f} |" for name, value in coefficients.items())
     result_rows = "\n".join(
@@ -740,6 +792,37 @@ This test uses SPY, IWM, long Treasuries, high-yield credit, gold and the U.S. d
 |---|---:|---:|---:|---:|---:|
 {diversified_rows}
 """
+    if dynamic_results.empty:
+        dynamic_section = """## Dynamic Growth / Defense Candidate: NOT RUN
+
+The aligned diversified history was unavailable.
+"""
+    else:
+        full = dynamic_results[dynamic_results["scope"] == "Full history"]
+        yearly = dynamic_results[dynamic_results["scope"] == "Calendar year"]
+        candidate = full[full["strategy"] == "dynamic_growth_defense"].iloc[0]
+        alternatives = full[full["strategy"] != "dynamic_growth_defense"]
+        pivot = yearly.pivot(index="period", columns="strategy", values="sharpe")
+        year_wins = int((pivot["dynamic_growth_defense"] > pivot.drop(columns="dynamic_growth_defense").max(axis=1)).sum())
+        dynamic_pass = (candidate["sharpe"] > alternatives["sharpe"].max() and
+                        candidate["annual_return"] > 0 and
+                        candidate["drawdown"] > full[full["strategy"] == "spy"]["drawdown"].iloc[0] and
+                        year_wins >= len(pivot) / 2)
+        dynamic_verdict = "PASS FOR PAPER TESTING" if dynamic_pass else "REJECTED AS A TRADING MODEL"
+        dynamic_rows = "\n".join(
+            f"| {row.strategy.replace('_', ' ').title()} | {row.annual_return:.1%} | "
+            f"{row.volatility:.1%} | {row.sharpe:.2f} | {row.drawdown:.1%} | {row.calmar:.2f} |"
+            for row in full.itertuples(index=False)
+        )
+        dynamic_section = f"""## Dynamic Growth / Defense Candidate: {dynamic_verdict}
+
+- The dynamic strategy has the best yearly Sharpe in **{year_wins} / {len(pivot)}** years.
+- When SPY's 63-day return and price-versus-200-day average are positive, growth receives 50%; otherwise the diversified defensive sleeve receives 100%.
+
+| Portfolio | Annual return | Volatility | Sharpe | Maximum drawdown | Calmar |
+|---|---:|---:|---:|---:|---:|
+{dynamic_rows}
+"""
     return f"""# MarketLab Model Training — {market_date}
 
 Chronological out-of-sample research result. This model does not place orders.
@@ -785,6 +868,8 @@ Chronological out-of-sample research result. This model does not place orders.
 
 {diversified_section}
 
+{dynamic_section}
+
 ## Latest standardized coefficients
 
 | Feature | Coefficient |
@@ -811,6 +896,7 @@ def main() -> None:
     diversified_predictions, diversified_results = multi_asset_allocation_evaluation(
         data, tickers=DIVERSIFIED_TICKERS
     )
+    dynamic_predictions, dynamic_results = dynamic_growth_defense_evaluation(data)
     coefficient_parts = []
     available_tickers = [ticker for ticker in TRAIN_TICKERS
                          if ticker in data.index.get_level_values("ticker_id")]
@@ -895,8 +981,15 @@ def main() -> None:
     diversified_predictions.tail(200).to_csv(
         OUTPUT_DIR / "latest_diversified_allocation_predictions.csv"
     )
+    dynamic_results.assign(market_date=market_date).to_csv(
+        OUTPUT_DIR / "latest_dynamic_allocation.csv", index=False
+    )
+    dynamic_predictions.tail(200).to_csv(
+        OUTPUT_DIR / "latest_dynamic_allocation_predictions.csv"
+    )
     report = render_report(results, risk_results, context_results, portfolio_result,
                            regime_results, volatility_results, allocation_results, diversified_results,
+                           dynamic_results,
                            coefficients, market_date)
     (OUTPUT_DIR / "latest.md").write_text(report, encoding="utf-8")
     history = OUTPUT_DIR / "history"
