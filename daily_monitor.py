@@ -16,16 +16,19 @@ from strategy import indicators
 from global_context import context_assessment, download_global_factors, fetch_news_context, market_regime
 
 
-WATCHLIST = ["SPY", "QQQ", "IWM", "AAPL", "MSFT", "NVDA", "XLK", "XLE", "XLF"]
+WATCHLIST = ["SPY", "QQQ", "IWM", "AAPL", "MSFT", "NVDA", "XLK", "XLE", "XLF",
+             "TLT", "HYG", "GLD", "UUP"]
+DIVERSIFIED_TICKERS = ("SPY", "IWM", "TLT", "HYG", "GLD", "UUP")
 OUTPUT_DIR = Path("published_research/daily")
+PAPER_DIR = Path("published_research/paper_tracking")
 
 
 def summarize(ticker: str, frame: pd.DataFrame) -> dict:
     if isinstance(frame.columns, pd.MultiIndex):
         frame.columns = frame.columns.get_level_values(0)
     frame = frame.dropna(subset=["Close"]).copy()
-    if len(frame) < 61:
-        raise ValueError(f"{ticker}: fewer than 61 observations")
+    if len(frame) < 201:
+        raise ValueError(f"{ticker}: fewer than 201 observations")
 
     enriched = indicators(frame, fast=20, slow=60)
     latest = enriched.iloc[-1]
@@ -53,9 +56,11 @@ def summarize(ticker: str, frame: pd.DataFrame) -> dict:
         "return_1d": float(returns.iloc[-1]),
         "return_5d": float(frame["Close"].iloc[-1] / frame["Close"].iloc[-6] - 1),
         "return_21d": float(frame["Close"].iloc[-1] / frame["Close"].iloc[-22] - 1),
+        "return_63d": float(frame["Close"].iloc[-1] / frame["Close"].iloc[-64] - 1),
         "volatility_21d_annualized": float(returns.tail(21).std() * np.sqrt(252)),
         "ma20": round(float(latest["fast"]), 4),
         "ma60": round(float(latest["slow"]), 4),
+        "ma200": round(float(frame["Close"].rolling(200).mean().iloc[-1]), 4),
         "rsi14": round(rsi, 2),
         "trend_state": trend,
     }
@@ -65,13 +70,96 @@ def download_snapshot() -> pd.DataFrame:
     rows = []
     for ticker in WATCHLIST:
         try:
-            data = yf.download(ticker, period="6mo", auto_adjust=True, progress=False)
+            data = yf.download(ticker, period="2y", auto_adjust=True, progress=False)
             rows.append(summarize(ticker, data))
         except Exception as exc:
             print(f"Skipping {ticker}: {exc}")
     if not rows:
         raise RuntimeError("No market data was available; no snapshot was written.")
     return pd.DataFrame(rows).sort_values("ticker").reset_index(drop=True)
+
+
+def candidate_weights(snapshot: pd.DataFrame) -> pd.DataFrame:
+    """Freeze the current growth/defense weights without placing an order."""
+    current = snapshot.set_index("ticker")
+    missing = set(DIVERSIFIED_TICKERS) - set(current.index)
+    if missing:
+        raise ValueError(f"Paper signal is missing assets: {sorted(missing)}")
+    sleeve = current.loc[list(DIVERSIFIED_TICKERS)].copy()
+    inverse_vol = 1 / sleeve["volatility_21d_annualized"].replace(0, np.nan)
+    defensive = inverse_vol / inverse_vol.sum()
+    spy = sleeve.loc["SPY"]
+    positive_trend = bool(spy["return_63d"] > 0 and spy["close"] > spy["ma200"])
+    growth_share = 0.5 if positive_trend else 0.0
+    weights = defensive * (1 - growth_share)
+    weights.loc["SPY"] += growth_share
+    result = pd.DataFrame({
+        "signal_date": snapshot["date"].max(),
+        "ticker": weights.index,
+        "weight": weights.values,
+        "growth_share": growth_share,
+        "regime": "growth" if positive_trend else "defense",
+    })
+    return result.reset_index(drop=True)
+
+
+def record_paper_signal(snapshot: pd.DataFrame) -> Path:
+    """Write one immutable end-of-day paper signal for prospective scoring."""
+    weights = candidate_weights(snapshot)
+    signal_date = str(weights["signal_date"].iloc[0])
+    signal_dir = PAPER_DIR / "signals"
+    signal_dir.mkdir(parents=True, exist_ok=True)
+    path = signal_dir / f"{signal_date}.csv"
+    if not path.exists():
+        weights.to_csv(path, index=False)
+    allocation = ", ".join(
+        f"{row.ticker} {row.weight:.1%}" for row in weights.itertuples(index=False)
+    )
+    (PAPER_DIR / "latest.md").write_text(
+        f"# Paper Candidate — {signal_date}\n\n"
+        f"Regime: **{weights['regime'].iloc[0]}** · Growth sleeve: "
+        f"**{weights['growth_share'].iloc[0]:.0%}**\n\n"
+        f"{allocation}\n\nThis is a frozen research observation. No order is sent. "
+        "Scoring begins at the next archived close to avoid same-close execution bias.\n",
+        encoding="utf-8",
+    )
+    return path
+
+
+def score_mature_signal(snapshot: pd.DataFrame) -> Path | None:
+    """Score after a one-session execution delay and five-session holding period."""
+    snapshot_paths = sorted(OUTPUT_DIR.glob("????-??-??.csv"))
+    if len(snapshot_paths) < 7:
+        return None
+    signal_snapshot_path = snapshot_paths[-7]
+    entry_path = snapshot_paths[-6]
+    signal_path = PAPER_DIR / "signals" / signal_snapshot_path.name
+    if not signal_path.exists():
+        return None
+    outcome_dir = PAPER_DIR / "outcomes"
+    outcome_dir.mkdir(parents=True, exist_ok=True)
+    outcome_path = outcome_dir / signal_snapshot_path.name
+    if outcome_path.exists():
+        return outcome_path
+    entry = pd.read_csv(entry_path).set_index("ticker")
+    end = snapshot.set_index("ticker")
+    weights = pd.read_csv(signal_path).set_index("ticker")
+    tickers = list(weights.index)
+    if not set(tickers).issubset(entry.index) or not set(tickers).issubset(end.index):
+        return None
+    asset_returns = end.loc[tickers, "close"] / entry.loc[tickers, "close"] - 1
+    candidate_return = float((weights["weight"] * asset_returns).sum())
+    benchmark_return = float(end.loc["SPY", "close"] / entry.loc["SPY", "close"] - 1)
+    pd.DataFrame([{
+        "signal_date": signal_snapshot_path.stem,
+        "entry_date": entry_path.stem,
+        "evaluation_date": snapshot["date"].max(),
+        "sessions": 5,
+        "candidate_return": candidate_return,
+        "spy_return": benchmark_return,
+        "excess_return": candidate_return - benchmark_return,
+    }]).to_csv(outcome_path, index=False)
+    return outcome_path
 
 
 def markdown_report(snapshot: pd.DataFrame, factors: pd.DataFrame | None = None,
@@ -136,6 +224,11 @@ def main() -> None:
     snapshot_path = OUTPUT_DIR / f"{market_date}.csv"
     if snapshot_path.exists():
         print(f"Market date {market_date} is already archived; preserving the original observation without backfilling newer context.")
+        # A code deployment can introduce paper tracking after the daily market
+        # snapshot was already archived. Freeze today's signal from the fresh
+        # download without rewriting the immutable observation.
+        record_paper_signal(snapshot)
+        score_mature_signal(snapshot)
         return
     try:
         factors = download_global_factors()
@@ -152,6 +245,8 @@ def main() -> None:
     if not news.empty and not news_path.exists():
         news.to_csv(news_path, index=False)
     (OUTPUT_DIR / f"{market_date}.md").write_text(markdown_report(snapshot, factors, news), encoding="utf-8")
+    record_paper_signal(snapshot)
+    score_mature_signal(snapshot)
     print(f"Saved {len(snapshot)} observations for {market_date}.")
     print("Freshness is evaluated in the Daily Monitor; duplicate market dates are intentionally not recommitted.")
 
