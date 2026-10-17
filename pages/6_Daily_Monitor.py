@@ -40,6 +40,64 @@ if lag:
     st.warning(("行情源尚未提供最新完整日线；页面保留最后一个已确认交易日，不会用重复数据冒充新记录。" if zh else
                 "The data source has not supplied the latest complete daily bar. The page keeps the last confirmed market day rather than presenting duplicate data as new."))
 
+paper_dir = Path("published_research/paper_tracking")
+signal_paths = sorted((paper_dir / "signals").glob("????-??-??.csv"))
+if signal_paths:
+    signals = pd.read_csv(signal_paths[-1])
+    if "candidate" not in signals:
+        signals["candidate"] = "growth_50"
+    signal_date = str(signals["signal_date"].iloc[0])
+    scorecard_path = paper_dir / "scorecard.csv"
+    scorecard_status = pd.read_csv(scorecard_path) if scorecard_path.exists() else pd.DataFrame()
+
+    st.subheader("纸面候选" if zh else "Paper Candidates")
+    st.caption(("冻结权重只用于前瞻验证，不会发送订单。" if zh else
+                "Frozen allocations are for prospective validation only; no order is sent."))
+    p1, p2, p3 = st.columns(3)
+    p1.metric("最新信号日" if zh else "Latest Signal Date", signal_date)
+    p2.metric("候选数量" if zh else "Candidates", str(signals["candidate"].nunique()))
+    if scorecard_status.empty:
+        mature_text = "0"
+        status_text = "收集中" if zh else "Collecting"
+    else:
+        mature_text = str(int(scorecard_status["non_overlapping_observations"].max()))
+        statuses = sorted(set(scorecard_status["review_status"].astype(str)))
+        status_text = ", ".join(statuses)
+    p3.metric("不重叠成熟样本" if zh else "Mature Non-Overlapping", mature_text,
+              help=status_text)
+
+    allocation = signals[["candidate", "ticker", "weight"]].copy()
+    allocation["candidate"] = allocation["candidate"].replace({
+        "growth_25": "25% Conservative" if not zh else "25% 保守",
+        "growth_50": "50% Current" if not zh else "50% 现行",
+    })
+    allocation_chart = px.bar(
+        allocation, x="ticker", y="weight", color="candidate", barmode="group",
+        labels={"ticker": "资产" if zh else "Asset",
+                "weight": "权重" if zh else "Weight",
+                "candidate": "候选" if zh else "Candidate"},
+    )
+    allocation_chart.update_yaxes(tickformat=".0%")
+    allocation_chart.update_layout(height=330, margin=dict(l=10, r=10, t=20, b=10),
+                                   legend_title_text=None)
+    st.plotly_chart(allocation_chart, width="stretch")
+    if scorecard_status.empty:
+        st.info("首批5日结果尚未成熟，当前不会评价优劣。" if zh else
+                "The first five-session outcomes are not mature yet; no ranking is shown.")
+    else:
+        paper_shown = scorecard_status[["candidate", "non_overlapping_observations",
+                                        "non_overlapping_average_excess",
+                                        "non_overlapping_spy_win_rate", "review_status"]].copy()
+        paper_shown["non_overlapping_average_excess"] *= 100
+        paper_shown["non_overlapping_spy_win_rate"] *= 100
+        st.dataframe(paper_shown, width="stretch", hide_index=True,
+                     column_config={
+                         "non_overlapping_average_excess": st.column_config.NumberColumn(
+                             "平均超额" if zh else "Avg Excess", format="%.2f%%"),
+                         "non_overlapping_spy_win_rate": st.column_config.NumberColumn(
+                             "跑赢SPY" if zh else "Beat SPY", format="%.1f%%"),
+                     })
+
 left, right = st.columns([1.05, 1])
 with left:
     breadth_chart = px.line(breadth, x="date", y="breadth", markers=True,
