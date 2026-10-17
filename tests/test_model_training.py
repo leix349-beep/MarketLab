@@ -11,12 +11,22 @@ from model_training import (CONTEXT_FEATURES, FEATURES, RISK_FEATURES, build_con
                             growth_sleeve_frontier,
                             external_growth_sleeve_frontier,
                             growth_sleeve_uncertainty,
+                            experiment_registry,
                             risk_aware_sleeve_validation,
                             block_bootstrap_sharpe_difference, dynamic_allocation_sensitivity,
                             external_market_validation)
 
 
 class ModelTrainingTests(unittest.TestCase):
+    def test_experiment_registry_is_unique_and_keeps_rejections(self):
+        registry = experiment_registry("2026-10-09")
+        self.assertTrue(registry["experiment_id"].is_unique)
+        self.assertEqual(set(registry["decision"]), {"REJECTED", "PAPER_TRACKING"})
+        self.assertGreaterEqual((registry["decision"] == "REJECTED").sum(), 1)
+        self.assertTrue((registry["last_evaluated_market_date"] == "2026-10-09").all())
+        risk_aware = registry.loc[registry["family"] == "Risk-aware sleeve"].iloc[0]
+        self.assertEqual(risk_aware["decision"], "REJECTED")
+
     def test_future_rows_are_removed(self):
         index = pd.bdate_range("2020-01-01", periods=300)
         frame = pd.DataFrame({"Close": np.linspace(100, 150, len(index))}, index=index)

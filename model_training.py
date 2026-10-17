@@ -24,6 +24,48 @@ CONTEXT_RISK_FEATURES = RISK_FEATURES + CONTEXT_FEATURES
 OUTPUT_DIR = Path("published_research/model_training")
 
 
+def experiment_registry(market_date: str) -> pd.DataFrame:
+    """Return the auditable ledger of model families tested so far.
+
+    Failed ideas remain visible so they are not quietly rediscovered and
+    retested after their result is forgotten.
+    """
+    rows = [
+        ("ML-001", "Direction classifier", "Five-day direction probabilities can improve risk-adjusted returns.",
+         "Chronological refits with a five-session embargo and trading costs.",
+         "Six US assets", "REJECTED", "No durable advantage over the benchmark."),
+        ("ML-002", "Downside-risk filter", "Predicted five-day downside risk can improve the base strategy.",
+         "Nested threshold selection using past observations only.",
+         "Six US assets", "REJECTED", "Risk reduction did not produce a robust return trade-off."),
+        ("ML-003", "Cross-asset risk filter", "Rates, credit, dollar, gold and volatility add useful risk context.",
+         "Frozen contextual features with chronological evaluation.",
+         "Six US assets", "REJECTED", "Context did not pass the predeclared gates."),
+        ("ML-004", "Portfolio regime overlay", "Aggregated downside probabilities identify portfolio risk regimes.",
+         "Out-of-sample portfolio overlay with costs.",
+         "US training universe", "REJECTED", "The overlay was not consistently superior."),
+        ("ML-005", "Volatility target", "Fixed volatility targets improve the risk-return balance.",
+         "Multiple fixed targets compared without selecting on the final period.",
+         "SPY history and subperiods", "REJECTED", "Drawdowns fell, but Sharpe improvement was inconsistent."),
+        ("ML-006", "Multi-asset allocation", "Trend and inverse-volatility allocation improves on simple portfolios.",
+         "Frozen allocation rule, costs and chronological subperiods.",
+         "US multi-asset basket", "REJECTED", "The candidate failed the full validation gate."),
+        ("ML-007", "Dynamic growth / defense", "A trend-gated growth sleeve can reduce drawdown while retaining return.",
+         "Frozen 50% sleeve, stress tests, yearly checks and block bootstrap.",
+         "SPY plus defensive assets", "PAPER_TRACKING", "Historically promising but not statistically cleared for trading."),
+        ("ML-008", "Growth sleeve frontier", "A 25% sleeve offers a better robust risk-return balance than 50% or 75%.",
+         "Three predeclared sleeves; US uncertainty and untouched regional markets.",
+         "SPY, EFA, EEM, EWJ and VGK", "PAPER_TRACKING", "25% and 50% are tracked prospectively; no winner promoted."),
+        ("ML-009", "Risk-aware sleeve", "VIX and credit can switch prospectively between 25% and 50% growth.",
+         "Frozen VIX >= 25 or weak-credit rule, tested across five markets.",
+         "SPY, EFA, EEM, EWJ and VGK", "REJECTED", "Highest Sharpe in 0/5 markets and smallest drawdown in only 1/5."),
+    ]
+    columns = ("experiment_id", "family", "hypothesis", "frozen_design",
+               "validation_scope", "decision", "reason")
+    registry = pd.DataFrame(rows, columns=columns)
+    registry["last_evaluated_market_date"] = market_date
+    return registry
+
+
 def performance_metrics(returns: pd.Series, periods_per_year: float = 252 / 5) -> dict[str, float]:
     """Risk/return metrics for non-overlapping five-session observations."""
     returns = returns.replace([np.inf, -np.inf], np.nan).dropna()
@@ -1439,6 +1481,9 @@ def main() -> None:
     context_results = pd.DataFrame(context_result_rows)
     market_date = pd.Timestamp(data.index.get_level_values("date").max()).date().isoformat()
     OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
+    experiment_registry(market_date).to_csv(
+        OUTPUT_DIR / "experiment_registry.csv", index=False
+    )
     results.assign(market_date=market_date).to_csv(OUTPUT_DIR / "latest.csv", index=False)
     pd.concat(prediction_parts).sort_values(["date", "ticker"]).groupby("ticker").tail(100).to_csv(
         OUTPUT_DIR / "latest_predictions.csv", index=False

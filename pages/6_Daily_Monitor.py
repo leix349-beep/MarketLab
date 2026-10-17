@@ -98,6 +98,21 @@ if signal_paths:
                              "跑赢SPY" if zh else "Beat SPY", format="%.1f%%"),
                      })
 
+registry_path = Path("published_research/model_training/experiment_registry.csv")
+if registry_path.exists():
+    registry = pd.read_csv(registry_path)
+    st.subheader("研究纪律" if zh else "Research Discipline")
+    st.caption(("失败实验同样保留，避免重复试错或只展示好结果。" if zh else
+                "Failed experiments stay visible to prevent repeated testing and result cherry-picking."))
+    r1, r2, r3 = st.columns(3)
+    r1.metric("已登记实验" if zh else "Registered Experiments", str(len(registry)))
+    r2.metric("已拒绝" if zh else "Rejected", str(int((registry["decision"] == "REJECTED").sum())))
+    r3.metric("纸面跟踪" if zh else "Paper Tracking",
+              str(int((registry["decision"] == "PAPER_TRACKING").sum())))
+    with st.expander("查看实验账本" if zh else "View experiment ledger"):
+        st.dataframe(registry[["experiment_id", "family", "validation_scope", "decision", "reason"]],
+                     width="stretch", hide_index=True)
+
 left, right = st.columns([1.05, 1])
 with left:
     breadth_chart = px.line(breadth, x="date", y="breadth", markers=True,
