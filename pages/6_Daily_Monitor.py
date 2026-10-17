@@ -103,6 +103,13 @@ if registry_path.exists():
     registry = pd.read_csv(registry_path)
     provenance_path = Path("published_research/model_training/data_provenance.csv")
     provenance = pd.read_csv(provenance_path).iloc[0] if provenance_path.exists() else None
+    provenance_history_path = Path("published_research/model_training/data_provenance_history.csv")
+    provenance_history = (pd.read_csv(provenance_history_path)
+                          if provenance_history_path.exists() else pd.DataFrame())
+    revision_count = 0
+    if provenance is not None and not provenance_history.empty:
+        revision_count = int((provenance_history["end_date"].astype(str) ==
+                              str(provenance["end_date"])).sum())
     st.subheader("研究纪律" if zh else "Research Discipline")
     st.caption(("失败实验同样保留，避免重复试错或只展示好结果。" if zh else
                 "Failed experiments stay visible to prevent repeated testing and result cherry-picking."))
@@ -113,8 +120,14 @@ if registry_path.exists():
               str(int((registry["decision"] == "PAPER_TRACKING").sum())))
     r4.metric("数据指纹" if zh else "Data Fingerprint",
               str(provenance["data_sha256"])[:10] if provenance is not None else "—",
+              delta=((f"{revision_count} 个版本" if zh else f"{revision_count} version(s)")
+                     if revision_count > 1 else None),
+              delta_color="inverse",
               help=("历史数据若被供应商修订，这个指纹会改变。" if zh else
                     "This fingerprint changes when the provider revises the historical dataset."))
+    if revision_count > 1:
+        st.warning(("同一最新行情日期出现多个数据版本；比较模型结果时请检查供应商修订。" if zh else
+                    "Multiple dataset versions exist for the same latest market date; check provider revisions before comparing model results."))
     with st.expander("查看实验账本" if zh else "View experiment ledger"):
         st.dataframe(registry[["experiment_id", "family", "validation_scope", "decision", "reason"]],
                      width="stretch", hide_index=True)

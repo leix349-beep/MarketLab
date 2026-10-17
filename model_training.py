@@ -45,6 +45,24 @@ def dataset_provenance(data: pd.DataFrame) -> dict[str, object]:
     }
 
 
+def merge_provenance_history(history: pd.DataFrame,
+                             current: dict[str, object]) -> pd.DataFrame:
+    """Append a genuinely new dataset version without duplicating reruns."""
+    columns = [*current.keys(), "revision"]
+    if history.empty:
+        row = current | {"revision": 1}
+        return pd.DataFrame([row], columns=columns)
+    history = history.copy()
+    same_version = ((history["end_date"].astype(str) == str(current["end_date"])) &
+                    (history["data_sha256"].astype(str) == str(current["data_sha256"])))
+    if same_version.any():
+        return history
+    same_date = history["end_date"].astype(str) == str(current["end_date"])
+    revision = int(history.loc[same_date, "revision"].max()) + 1 if same_date.any() else 1
+    row = pd.DataFrame([current | {"revision": revision}], columns=columns)
+    return pd.concat([history, row], ignore_index=True)
+
+
 def experiment_registry(market_date: str) -> pd.DataFrame:
     """Return the auditable ledger of model families tested so far.
 
@@ -1502,8 +1520,15 @@ def main() -> None:
     context_results = pd.DataFrame(context_result_rows)
     market_date = pd.Timestamp(data.index.get_level_values("date").max()).date().isoformat()
     OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
-    pd.DataFrame([dataset_provenance(data)]).to_csv(
+    provenance = dataset_provenance(data)
+    pd.DataFrame([provenance]).to_csv(
         OUTPUT_DIR / "data_provenance.csv", index=False
+    )
+    provenance_history_path = OUTPUT_DIR / "data_provenance_history.csv"
+    provenance_history = (pd.read_csv(provenance_history_path)
+                          if provenance_history_path.exists() else pd.DataFrame())
+    merge_provenance_history(provenance_history, provenance).to_csv(
+        provenance_history_path, index=False
     )
     experiment_registry(market_date).to_csv(
         OUTPUT_DIR / "experiment_registry.csv", index=False

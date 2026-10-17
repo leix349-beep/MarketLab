@@ -13,6 +13,7 @@ from model_training import (CONTEXT_FEATURES, FEATURES, RISK_FEATURES, build_con
                             external_growth_sleeve_frontier,
                             growth_sleeve_uncertainty,
                             experiment_registry,
+                            merge_provenance_history,
                             risk_aware_sleeve_validation,
                             block_bootstrap_sharpe_difference, dynamic_allocation_sensitivity,
                             external_market_validation)
@@ -34,6 +35,24 @@ class ModelTrainingTests(unittest.TestCase):
         self.assertNotEqual(first["data_sha256"], dataset_provenance(revised)["data_sha256"])
         self.assertEqual(first["rows"], 3)
         self.assertEqual(first["tickers"], 1)
+
+    def test_provenance_history_deduplicates_reruns_and_numbers_revisions(self):
+        current = {
+            "provider": "test", "price_adjustment": "adjusted",
+            "start_date": "2025-01-01", "end_date": "2026-01-02",
+            "rows": 100, "tickers": 2, "data_sha256": "aaa",
+        }
+        history = merge_provenance_history(pd.DataFrame(), current)
+        self.assertEqual(len(history), 1)
+        self.assertEqual(int(history.iloc[0]["revision"]), 1)
+        self.assertEqual(len(merge_provenance_history(history, current)), 1)
+        revised = current | {"data_sha256": "bbb", "rows": 101}
+        history = merge_provenance_history(history, revised)
+        self.assertEqual(len(history), 2)
+        self.assertEqual(int(history.iloc[-1]["revision"]), 2)
+        next_date = current | {"end_date": "2026-01-05", "data_sha256": "ccc"}
+        history = merge_provenance_history(history, next_date)
+        self.assertEqual(int(history.iloc[-1]["revision"]), 1)
 
     def test_experiment_registry_is_unique_and_keeps_rejections(self):
         registry = experiment_registry("2026-10-09")
