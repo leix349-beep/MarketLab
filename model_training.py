@@ -495,11 +495,14 @@ def multi_asset_allocation_evaluation(data: pd.DataFrame, fee: float = 0.001,
 def dynamic_growth_defense_evaluation(data: pd.DataFrame, fee: float = 0.001,
                                       rebalance_every: int = 1,
                                       tickers: tuple[str, ...] = DIVERSIFIED_TICKERS,
-                                      growth_ticker: str = "SPY"
+                                      growth_ticker: str = "SPY",
+                                      growth_sleeve: float = 0.5,
                                       ) -> tuple[pd.DataFrame, pd.DataFrame]:
     """Switch a fixed growth sleeve into a diversified defensive sleeve."""
     if rebalance_every < 1:
         raise ValueError("Rebalance interval must be at least one five-session block.")
+    if not 0 <= growth_sleeve <= 1:
+        raise ValueError("Growth sleeve must be between zero and one.")
     required = {"future_return", "vol_21", "ret_63", "ma200_gap"}
     if not required.issubset(data.columns):
         raise ValueError("Dynamic allocation is missing required observable features.")
@@ -519,10 +522,10 @@ def dynamic_growth_defense_evaluation(data: pd.DataFrame, fee: float = 0.001,
     defensive = inverse_vol.div(inverse_vol.sum(axis=1), axis=0).fillna(0)
     growth = pd.DataFrame(0.0, index=dates, columns=tickers)
     growth[growth_ticker] = 1.0
-    static_blend = 0.5 * growth + 0.5 * defensive
+    static_blend = growth_sleeve * growth + (1 - growth_sleeve) * defensive
     positive_trend = ((panels["ret_63"].loc[dates, growth_ticker] > 0) &
                       (panels["ma200_gap"].loc[dates, growth_ticker] > 0)).astype(float)
-    growth_share = positive_trend * 0.5
+    growth_share = positive_trend * growth_sleeve
     dynamic = defensive.mul(1 - growth_share, axis=0) + growth.mul(growth_share, axis=0)
 
     def hold_weights(weights: pd.DataFrame) -> pd.DataFrame:
@@ -556,6 +559,42 @@ def dynamic_growth_defense_evaluation(data: pd.DataFrame, fee: float = 0.001,
             rows.append({"scope": "Calendar year", "period": str(year), "strategy": name,
                          "observations": len(period), **performance_metrics(period[name])})
     return returns, pd.DataFrame(rows)
+
+
+def growth_sleeve_frontier(data: pd.DataFrame) -> pd.DataFrame:
+    """Compare three predeclared growth sleeves without selecting a winner."""
+    rows = []
+    for sleeve in (0.25, 0.50, 0.75):
+        returns, summary = dynamic_growth_defense_evaluation(
+            data, growth_sleeve=sleeve
+        )
+        if summary.empty:
+            continue
+        full = summary[summary["scope"] == "Full history"].set_index("strategy")
+        yearly = summary[summary["scope"] == "Calendar year"].pivot(
+            index="period", columns="strategy", values="sharpe"
+        )
+        annual = summary[(summary["scope"] == "Calendar year") &
+                         (summary["strategy"] == "dynamic_growth_defense")]
+        candidate = full.loc["dynamic_growth_defense"]
+        rows.append({
+            "growth_sleeve": sleeve,
+            "observations": int(candidate["observations"]),
+            "annual_return": candidate["annual_return"],
+            "volatility": candidate["volatility"],
+            "sharpe": candidate["sharpe"],
+            "drawdown": candidate["drawdown"],
+            "calmar": candidate["calmar"],
+            "expected_shortfall_5": candidate["expected_shortfall_5"],
+            "years_higher_sharpe_than_spy": int(
+                (yearly["dynamic_growth_defense"] > yearly["spy"]).sum()
+            ),
+            "years_tested": int(len(yearly)),
+            "positive_years": int((annual["annual_return"] > 0).sum()),
+            "worst_calendar_return": float(annual["annual_return"].min()),
+            "average_growth_share": float(returns["growth_share"].mean()),
+        })
+    return pd.DataFrame(rows)
 
 
 def external_market_validation(data: pd.DataFrame) -> pd.DataFrame:
@@ -705,6 +744,7 @@ def render_report(results: pd.DataFrame, risk_results: pd.DataFrame,
                   dynamic_results: pd.DataFrame,
                   dynamic_uncertainty: pd.DataFrame,
                   dynamic_sensitivity: pd.DataFrame,
+                  growth_frontier: pd.DataFrame,
                   external_results: pd.DataFrame,
                   coefficients: pd.Series, market_date: str) -> str:
     rows = "\n".join(f"| {name} | {value:+.4f} |" for name, value in coefficients.items())
@@ -988,6 +1028,28 @@ The resampling keeps four adjacent five-session observations together. A candida
 
 The candidate must remain profitable, above 1.0 Sharpe and within a 20% drawdown in every predeclared stress scenario.
 """
+    if growth_frontier.empty:
+        frontier_section = """## Growth-Sleeve Risk / Return Frontier: NOT RUN
+
+Insufficient aligned history was available.
+"""
+    else:
+        frontier_rows = "\n".join(
+            f"| {row.growth_sleeve:.0%} | {row.average_growth_share:.1%} | "
+            f"{row.annual_return:.1%} | {row.volatility:.1%} | {row.sharpe:.2f} | "
+            f"{row.drawdown:.1%} | {row.expected_shortfall_5:.1%} | "
+            f"{int(row.positive_years)} / {int(row.years_tested)} | "
+            f"{int(row.years_higher_sharpe_than_spy)} / {int(row.years_tested)} |"
+            for row in growth_frontier.itertuples(index=False)
+        )
+        frontier_section = f"""## Growth-Sleeve Risk / Return Frontier
+
+The trend rule, defensive basket, rebalance interval and costs are unchanged. Only three predeclared maximum growth sleeves are compared; no winner is promoted from this table alone.
+
+| Max growth sleeve | Average growth exposure | Annual return | Volatility | Sharpe | Maximum drawdown | Worst-5% average | Positive years | Years beating SPY Sharpe |
+|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+{frontier_rows}
+"""
     if external_results.empty:
         external_section = """## External-Market Validation: NOT RUN
 
@@ -1071,6 +1133,8 @@ Chronological out-of-sample research result. This model does not place orders.
 
 {dynamic_section}
 
+{frontier_section}
+
 {external_section}
 
 ## Latest standardized coefficients
@@ -1102,6 +1166,7 @@ def main() -> None:
     dynamic_predictions, dynamic_results = dynamic_growth_defense_evaluation(data)
     dynamic_uncertainty = dynamic_allocation_uncertainty(dynamic_predictions)
     dynamic_sensitivity = dynamic_allocation_sensitivity(data)
+    growth_frontier = growth_sleeve_frontier(data)
     external_results = external_market_validation(data)
     coefficient_parts = []
     available_tickers = [ticker for ticker in TRAIN_TICKERS
@@ -1199,12 +1264,16 @@ def main() -> None:
     dynamic_sensitivity.assign(market_date=market_date).to_csv(
         OUTPUT_DIR / "latest_dynamic_sensitivity.csv", index=False
     )
+    growth_frontier.assign(market_date=market_date).to_csv(
+        OUTPUT_DIR / "latest_growth_sleeve_frontier.csv", index=False
+    )
     external_results.assign(market_date=market_date).to_csv(
         OUTPUT_DIR / "latest_external_validation.csv", index=False
     )
     report = render_report(results, risk_results, context_results, portfolio_result,
                            regime_results, volatility_results, allocation_results, diversified_results,
-                           dynamic_results, dynamic_uncertainty, dynamic_sensitivity, external_results,
+                           dynamic_results, dynamic_uncertainty, dynamic_sensitivity, growth_frontier,
+                           external_results,
                            coefficients, market_date)
     (OUTPUT_DIR / "latest.md").write_text(report, encoding="utf-8")
     history = OUTPUT_DIR / "history"

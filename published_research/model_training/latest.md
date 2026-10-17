@@ -1,4 +1,4 @@
-# MarketLab Model Training — 2026-10-08
+# MarketLab Model Training — 2026-10-09
 
 Chronological out-of-sample research result. This model does not place orders.
 
@@ -13,23 +13,23 @@ Chronological out-of-sample research result. This model does not place orders.
 
 | Asset | OOS rows | Accuracy | Edge vs naive | Balanced acc. | Exposure | Signal win rate | Model return | Buy & hold | Max drawdown |
 |---|---:|---:|---:|---:|---:|---:|---:|---:|---:|
-| SPY | 1,690 | 59.9% | -0.2% | 49.9% | 7.4% | 56.8% | 1.8% | 158.0% | -12.6% |
-| QQQ | 1,690 | 58.3% | -0.4% | 49.7% | 13.6% | 52.8% | -11.0% | 249.7% | -25.0% |
-| IWM | 1,690 | 52.5% | -0.7% | 49.5% | 15.6% | 53.2% | -24.1% | 79.2% | -35.7% |
-| XLK | 1,690 | 57.9% | -0.3% | 49.8% | 13.1% | 54.5% | 1.3% | 332.6% | -21.9% |
-| XLF | 1,690 | 54.5% | -1.8% | 49.0% | 17.5% | 52.2% | -28.7% | 99.7% | -33.1% |
-| XLE | 1,690 | 55.0% | -1.3% | 51.2% | 16.6% | 54.4% | -1.7% | 189.3% | -48.3% |
+| SPY | 1,691 | 59.8% | -0.2% | 49.9% | 7.4% | 56.8% | 1.8% | 152.9% | -12.6% |
+| QQQ | 1,691 | 58.3% | -0.4% | 49.7% | 13.5% | 52.8% | -11.0% | 230.4% | -25.0% |
+| IWM | 1,691 | 52.5% | -0.7% | 49.5% | 15.6% | 53.2% | -24.1% | 73.7% | -35.7% |
+| XLK | 1,691 | 57.9% | -0.3% | 49.8% | 13.1% | 54.5% | 1.3% | 299.2% | -21.9% |
+| XLF | 1,691 | 54.5% | -1.8% | 49.0% | 17.5% | 52.4% | -27.6% | 102.6% | -33.1% |
+| XLE | 1,691 | 55.0% | -1.3% | 51.2% | 16.6% | 54.4% | -1.7% | 203.3% | -48.3% |
 
 ## Risk / Return Balance
 
 | Asset | Model ann. return | B&H ann. return | Model vol. | B&H vol. | Model Sharpe | B&H Sharpe | Model Calmar | B&H Calmar |
 |---|---:|---:|---:|---:|---:|---:|---:|---:|
-| SPY | 0.3% | 15.2% | 6.7% | 17.0% | 0.07 | 0.92 | 0.02 | 0.55 |
-| QQQ | -1.7% | 20.5% | 11.3% | 21.5% | -0.10 | 0.98 | -0.07 | 0.58 |
-| IWM | -4.0% | 9.1% | 12.1% | 23.5% | -0.27 | 0.49 | -0.11 | 0.26 |
-| XLK | 0.2% | 24.4% | 10.2% | 24.3% | 0.07 | 1.02 | 0.01 | 0.76 |
-| XLF | -4.9% | 10.9% | 10.7% | 21.1% | -0.41 | 0.60 | -0.15 | 0.31 |
-| XLE | -0.3% | 17.2% | 18.6% | 31.0% | 0.08 | 0.67 | -0.01 | 0.35 |
+| SPY | 0.3% | 14.8% | 6.7% | 17.0% | 0.07 | 0.90 | 0.02 | 0.54 |
+| QQQ | -1.7% | 19.4% | 11.3% | 21.6% | -0.10 | 0.93 | -0.07 | 0.55 |
+| IWM | -4.0% | 8.6% | 12.1% | 23.5% | -0.27 | 0.47 | -0.11 | 0.24 |
+| XLK | 0.2% | 22.9% | 10.2% | 24.5% | 0.07 | 0.97 | 0.01 | 0.72 |
+| XLF | -4.7% | 11.1% | 10.7% | 21.0% | -0.39 | 0.61 | -0.14 | 0.31 |
+| XLE | -0.3% | 17.9% | 18.6% | 31.0% | 0.08 | 0.69 | -0.01 | 0.36 |
 
 ## Downside-Risk Filter Candidate: REJECTED AS A TRADING MODEL
 
@@ -40,10 +40,10 @@ Chronological out-of-sample research result. This model does not place orders.
 | Asset | Risk event rate | ROC AUC | Risk recall | Exit rate | Ann. return | Model Sharpe | B&H Sharpe | Model DD | B&H DD |
 |---|---:|---:|---:|---:|---:|---:|---:|---:|---:|
 | SPY | 13.3% | 0.576 | 11.2% | 8.9% | 8.6% | 0.63 | 1.02 | -28.8% | -23.5% |
-| QQQ | 20.1% | 0.539 | 17.3% | 17.0% | 7.4% | 0.47 | 0.89 | -42.4% | -34.6% |
+| QQQ | 20.1% | 0.538 | 17.3% | 17.0% | 7.4% | 0.47 | 0.89 | -42.4% | -34.6% |
 | IWM | 19.9% | 0.432 | 2.6% | 7.5% | 0.1% | 0.11 | 0.60 | -45.6% | -31.0% |
-| XLK | 21.5% | 0.489 | 12.0% | 13.7% | 13.7% | 0.71 | 0.99 | -37.0% | -31.6% |
-| XLF | 15.6% | 0.503 | 3.7% | 3.7% | 13.2% | 0.75 | 0.88 | -25.0% | -24.9% |
+| XLK | 21.6% | 0.488 | 11.9% | 13.6% | 13.7% | 0.71 | 0.99 | -37.0% | -31.6% |
+| XLF | 15.6% | 0.504 | 3.7% | 3.7% | 13.2% | 0.75 | 0.88 | -25.0% | -24.9% |
 | XLE | 23.6% | 0.464 | 9.0% | 10.0% | 15.7% | 0.68 | 0.99 | -26.3% | -26.3% |
 
 ## Cross-Asset Risk Candidate: REJECTED AS A TRADING MODEL
@@ -57,8 +57,8 @@ Uses credit versus Treasuries, the dollar, gold, VIX, SPY trend and market bread
 | Asset | ROC AUC | Risk recall | Exit rate | Avg threshold | No-filter fallback | Ann. return | Model Sharpe | B&H Sharpe | Model DD | B&H DD |
 |---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
 | SPY | 0.586 | 43.7% | 32.8% | 0.22 | 0.0% | 7.7% | 0.68 | 1.02 | -18.6% | -23.5% |
-| QQQ | 0.523 | 31.7% | 28.8% | 0.28 | 0.0% | 10.0% | 0.62 | 0.89 | -25.4% | -34.6% |
-| IWM | 0.443 | 38.5% | 34.4% | 0.28 | 4.1% | 5.6% | 0.40 | 0.60 | -42.4% | -31.0% |
+| QQQ | 0.522 | 31.6% | 28.8% | 0.28 | 0.0% | 10.0% | 0.62 | 0.89 | -25.4% | -34.6% |
+| IWM | 0.443 | 38.4% | 34.4% | 0.28 | 4.1% | 5.6% | 0.40 | 0.60 | -42.4% | -31.0% |
 | XLK | 0.479 | 26.6% | 33.4% | 0.26 | 0.0% | 6.6% | 0.42 | 0.99 | -31.6% | -31.6% |
 | XLF | 0.548 | 30.6% | 31.5% | 0.29 | 4.1% | -0.6% | 0.04 | 0.88 | -35.7% | -24.9% |
 | XLE | 0.466 | 28.1% | 29.6% | 0.39 | 8.1% | 7.7% | 0.43 | 0.99 | -30.3% | -26.3% |
@@ -201,6 +201,17 @@ The resampling keeps four adjacent five-session observations together. A candida
 The candidate must remain profitable, above 1.0 Sharpe and within a 20% drawdown in every predeclared stress scenario.
 
 
+## Growth-Sleeve Risk / Return Frontier
+
+The trend rule, defensive basket, rebalance interval and costs are unchanged. Only three predeclared maximum growth sleeves are compared; no winner is promoted from this table alone.
+
+| Max growth sleeve | Average growth exposure | Annual return | Volatility | Sharpe | Maximum drawdown | Worst-5% average | Positive years | Years beating SPY Sharpe |
+|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| 25% | 18.5% | 7.8% | 6.9% | 1.13 | -12.7% | -2.3% | 9 / 10 | 6 / 10 |
+| 50% | 37.0% | 9.2% | 8.5% | 1.09 | -16.0% | -2.9% | 9 / 10 | 4 / 10 |
+| 75% | 55.5% | 10.6% | 10.3% | 1.04 | -19.3% | -3.6% | 8 / 10 | 4 / 10 |
+
+
 ## External-Market Validation: FAIL
 
 The U.S.-designed rule is frozen and applied without retuning to developed ex-U.S., emerging markets, Japan and Europe.
@@ -222,11 +233,11 @@ The U.S.-designed rule is frozen and applied without retuning to developed ex-U.
 
 | Feature | Coefficient |
 |---|---:|
-| ret_5 | -0.0222 |
-| ret_21 | +0.0335 |
-| ma_gap | -0.0474 |
-| rsi14 | -0.0283 |
-| vol_21 | +0.0109 |
-| drawdown_63 | -0.0079 |
+| ret_5 | -0.0218 |
+| ret_21 | +0.0326 |
+| ma_gap | -0.0470 |
+| rsi14 | -0.0278 |
+| vol_21 | +0.0111 |
+| drawdown_63 | -0.0080 |
 
 Each asset is trained and tested independently with a regularized logistic regression. The model is refit every 63 trading days and separated from each test block by a five-day embargo. Exposure requires at least 55% probability and a 3% edge over the training-period base rate. Returns use non-overlapping five-day samples and deduct 0.10% when exposure changes. They remain historical research rather than evidence of future profit.

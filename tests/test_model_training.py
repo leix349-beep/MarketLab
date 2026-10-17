@@ -8,6 +8,7 @@ from model_training import (CONTEXT_FEATURES, FEATURES, RISK_FEATURES, build_con
                             regime_stability_evaluation, roc_auc, select_risk_threshold,
                             volatility_target_robustness, multi_asset_allocation_evaluation,
                             dynamic_growth_defense_evaluation, dynamic_allocation_uncertainty,
+                            growth_sleeve_frontier,
                             block_bootstrap_sharpe_difference, dynamic_allocation_sensitivity,
                             external_market_validation)
 
@@ -207,6 +208,12 @@ class ModelTrainingTests(unittest.TestCase):
         self.assertEqual(len(sensitivity), 9)
         self.assertEqual(set(sensitivity["rebalance_sessions"]), {5, 10, 20})
         self.assertTrue(np.isfinite(sensitivity.select_dtypes(include=["number"])).all().all())
+        frontier = growth_sleeve_frontier(panel)
+        self.assertEqual(set(frontier["growth_sleeve"]), {0.25, 0.5, 0.75})
+        self.assertTrue(frontier["average_growth_share"].between(0, 0.75).all())
+        self.assertTrue(np.isfinite(frontier.select_dtypes(include=["number"])).all().all())
+        with self.assertRaises(ValueError):
+            dynamic_growth_defense_evaluation(panel, growth_sleeve=1.1)
 
     def test_block_bootstrap_detects_clear_sharpe_advantage(self):
         rng = np.random.default_rng(22)
