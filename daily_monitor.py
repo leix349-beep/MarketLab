@@ -193,12 +193,42 @@ def update_paper_scorecard() -> Path | None:
     outcomes = pd.concat((pd.read_csv(path) for path in paths), ignore_index=True)
     if "candidate" not in outcomes:
         outcomes["candidate"] = "growth_50"
-    required = {"signal_date", "candidate", "candidate_return", "spy_return", "excess_return"}
+    required = {"signal_date", "entry_date", "evaluation_date", "candidate",
+                "candidate_return", "spy_return", "excess_return"}
     if not required.issubset(outcomes.columns):
         raise ValueError("Paper outcomes are missing required scorecard columns.")
     outcomes = outcomes.drop_duplicates(["signal_date", "candidate"], keep="last")
     rows = []
     for candidate, group in outcomes.groupby("candidate", sort=True):
+        group = group.sort_values(["entry_date", "evaluation_date"]).copy()
+        independent_rows = []
+        last_evaluation = None
+        for row in group.itertuples(index=False):
+            entry_date = pd.Timestamp(row.entry_date)
+            evaluation_date = pd.Timestamp(row.evaluation_date)
+            if last_evaluation is None or entry_date > last_evaluation:
+                independent_rows.append(row)
+                last_evaluation = evaluation_date
+        independent = pd.DataFrame(independent_rows)
+        independent_count = len(independent)
+        independent_average_excess = (
+            float(independent["excess_return"].mean()) if independent_count else np.nan
+        )
+        independent_win_rate = (
+            float((independent["excess_return"] > 0).mean()) if independent_count else np.nan
+        )
+        lower_95 = np.nan
+        if independent_count >= 10:
+            rng = np.random.default_rng(20261017)
+            values = independent["excess_return"].to_numpy(dtype=float)
+            draws = rng.choice(values, size=(2000, independent_count), replace=True).mean(axis=1)
+            lower_95 = float(np.quantile(draws, 0.025))
+        if independent_count < 30:
+            review_status = "COLLECTING"
+        elif independent_average_excess > 0 and independent_win_rate >= 0.55 and lower_95 > 0:
+            review_status = "ELIGIBLE FOR REVIEW"
+        else:
+            review_status = "EVIDENCE INSUFFICIENT"
         rows.append({
             "candidate": candidate,
             "observations": len(group),
@@ -208,6 +238,11 @@ def update_paper_scorecard() -> Path | None:
             "spy_win_rate": (group["excess_return"] > 0).mean(),
             "average_excess_return": group["excess_return"].mean(),
             "worst_5d_return": group["candidate_return"].min(),
+            "non_overlapping_observations": independent_count,
+            "non_overlapping_average_excess": independent_average_excess,
+            "non_overlapping_spy_win_rate": independent_win_rate,
+            "excess_mean_lower_95": lower_95,
+            "review_status": review_status,
         })
     scorecard = pd.DataFrame(rows)
     PAPER_DIR.mkdir(parents=True, exist_ok=True)
@@ -217,17 +252,21 @@ def update_paper_scorecard() -> Path | None:
         f"| {row.candidate} | {row.observations} | {row.average_5d_return:.2%} | "
         f"{row.median_5d_return:.2%} | {row.positive_rate:.1%} | "
         f"{row.spy_win_rate:.1%} | {row.average_excess_return:+.2%} | "
-        f"{row.worst_5d_return:.2%} |"
+        f"{row.worst_5d_return:.2%} | {row.non_overlapping_observations} | "
+        f"{row.review_status} |"
         for row in scorecard.itertuples(index=False)
     )
     (PAPER_DIR / "scorecard.md").write_text(
         "# Prospective Paper Scorecard\n\n"
         "| Candidate | Mature signals | Avg 5D return | Median 5D return | Positive rate | "
-        "Beat SPY | Avg excess | Worst 5D return |\n"
-        "|---|---:|---:|---:|---:|---:|---:|---:|\n"
+        "Beat SPY | Avg excess | Worst 5D return | Non-overlapping samples | Status |\n"
+        "|---|---:|---:|---:|---:|---:|---:|---:|---:|---|\n"
         f"{table}\n\n"
-        "Five-session outcomes from consecutive signal dates overlap, so they are not compounded "
-        "or treated as independent statistical samples. This is research, not live performance.\n",
+        "Five-session outcomes from consecutive signal dates overlap, so they are not compounded. "
+        "Model review requires at least 30 non-overlapping observations, a positive average excess "
+        "return, at least a 55% SPY win rate, and a positive 95% bootstrap lower bound. Passing only "
+        "makes a candidate eligible for review; it never changes the model automatically. This is "
+        "research, not live performance.\n",
         encoding="utf-8",
     )
     return csv_path

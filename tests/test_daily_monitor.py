@@ -121,8 +121,10 @@ class DailyMonitorTests(unittest.TestCase):
             outcomes = paper / "outcomes"; outcomes.mkdir()
             pd.DataFrame([
                 {"signal_date": "2026-01-05", "candidate": "growth_25",
+                 "entry_date": "2026-01-06", "evaluation_date": "2026-01-13",
                  "candidate_return": 0.02, "spy_return": 0.01, "excess_return": 0.01},
                 {"signal_date": "2026-01-06", "candidate": "growth_25",
+                 "entry_date": "2026-01-07", "evaluation_date": "2026-01-14",
                  "candidate_return": -0.01, "spy_return": 0.00, "excess_return": -0.01},
             ]).to_csv(outcomes / "2026-01-05.csv", index=False)
             with patch("daily_monitor.PAPER_DIR", paper):
@@ -131,7 +133,32 @@ class DailyMonitorTests(unittest.TestCase):
             self.assertEqual(scorecard["observations"], 2)
             self.assertAlmostEqual(scorecard["average_5d_return"], 0.005)
             self.assertAlmostEqual(scorecard["spy_win_rate"], 0.5)
+            self.assertEqual(scorecard["non_overlapping_observations"], 1)
+            self.assertEqual(scorecard["review_status"], "COLLECTING")
             self.assertNotIn("cumulative", pd.read_csv(scorecard_path).columns)
+
+    def test_scorecard_requires_strong_non_overlapping_evidence(self):
+        with TemporaryDirectory(dir=Path("tests")) as directory:
+            paper = Path(directory)
+            outcomes = paper / "outcomes"; outcomes.mkdir()
+            rows = []
+            for index in range(30):
+                entry = pd.Timestamp("2024-01-02") + pd.Timedelta(days=index * 10)
+                evaluation = entry + pd.Timedelta(days=7)
+                rows.append({
+                    "signal_date": (entry - pd.Timedelta(days=1)).date().isoformat(),
+                    "entry_date": entry.date().isoformat(),
+                    "evaluation_date": evaluation.date().isoformat(),
+                    "candidate": "growth_25", "candidate_return": 0.02,
+                    "spy_return": 0.01, "excess_return": 0.01,
+                })
+            pd.DataFrame(rows).to_csv(outcomes / "2024-01-01.csv", index=False)
+            with patch("daily_monitor.PAPER_DIR", paper):
+                scorecard_path = update_paper_scorecard()
+            scorecard = pd.read_csv(scorecard_path).iloc[0]
+            self.assertEqual(scorecard["non_overlapping_observations"], 30)
+            self.assertGreater(scorecard["excess_mean_lower_95"], 0)
+            self.assertEqual(scorecard["review_status"], "ELIGIBLE FOR REVIEW")
 
 
 if __name__ == "__main__":
