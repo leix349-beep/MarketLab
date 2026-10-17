@@ -101,17 +101,28 @@ if signal_paths:
 registry_path = Path("published_research/model_training/experiment_registry.csv")
 if registry_path.exists():
     registry = pd.read_csv(registry_path)
+    provenance_path = Path("published_research/model_training/data_provenance.csv")
+    provenance = pd.read_csv(provenance_path).iloc[0] if provenance_path.exists() else None
     st.subheader("研究纪律" if zh else "Research Discipline")
     st.caption(("失败实验同样保留，避免重复试错或只展示好结果。" if zh else
                 "Failed experiments stay visible to prevent repeated testing and result cherry-picking."))
-    r1, r2, r3 = st.columns(3)
+    r1, r2, r3, r4 = st.columns(4)
     r1.metric("已登记实验" if zh else "Registered Experiments", str(len(registry)))
     r2.metric("已拒绝" if zh else "Rejected", str(int((registry["decision"] == "REJECTED").sum())))
     r3.metric("纸面跟踪" if zh else "Paper Tracking",
               str(int((registry["decision"] == "PAPER_TRACKING").sum())))
+    r4.metric("数据指纹" if zh else "Data Fingerprint",
+              str(provenance["data_sha256"])[:10] if provenance is not None else "—",
+              help=("历史数据若被供应商修订，这个指纹会改变。" if zh else
+                    "This fingerprint changes when the provider revises the historical dataset."))
     with st.expander("查看实验账本" if zh else "View experiment ledger"):
         st.dataframe(registry[["experiment_id", "family", "validation_scope", "decision", "reason"]],
                      width="stretch", hide_index=True)
+        if provenance is not None:
+            st.caption((f"训练数据：{provenance['start_date']} 至 {provenance['end_date']} · "
+                        f"{int(provenance['rows']):,} 行 · {int(provenance['tickers'])} 个标的") if zh else
+                       (f"Training data: {provenance['start_date']} to {provenance['end_date']} · "
+                        f"{int(provenance['rows']):,} rows · {int(provenance['tickers'])} assets"))
 
 left, right = st.columns([1.05, 1])
 with left:

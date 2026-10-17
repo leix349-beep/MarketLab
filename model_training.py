@@ -6,6 +6,7 @@ that has only seen earlier observations. No orders are placed.
 """
 from __future__ import annotations
 from dataclasses import dataclass
+import hashlib
 from pathlib import Path
 import numpy as np
 import pandas as pd
@@ -22,6 +23,26 @@ CONTEXT_FEATURES = ("market_ret_21", "market_ma_gap", "credit_vs_treasury_21",
                     "breadth_above_ma60")
 CONTEXT_RISK_FEATURES = RISK_FEATURES + CONTEXT_FEATURES
 OUTPUT_DIR = Path("published_research/model_training")
+
+
+def dataset_provenance(data: pd.DataFrame) -> dict[str, object]:
+    """Create a stable fingerprint for the exact panel used by a model run."""
+    if data.empty:
+        raise ValueError("Cannot fingerprint an empty training dataset.")
+    canonical = data.sort_index().sort_index(axis=1).reset_index()
+    hashed = pd.util.hash_pandas_object(canonical, index=False, categorize=True)
+    digest = hashlib.sha256(hashed.to_numpy().tobytes()).hexdigest()
+    dates = pd.to_datetime(data.index.get_level_values("date"))
+    tickers = sorted(set(data.index.get_level_values("ticker_id").astype(str)))
+    return {
+        "provider": "Yahoo Finance via yfinance",
+        "price_adjustment": "auto_adjust=True",
+        "start_date": dates.min().date().isoformat(),
+        "end_date": dates.max().date().isoformat(),
+        "rows": int(len(data)),
+        "tickers": int(len(tickers)),
+        "data_sha256": digest,
+    }
 
 
 def experiment_registry(market_date: str) -> pd.DataFrame:
@@ -1481,6 +1502,9 @@ def main() -> None:
     context_results = pd.DataFrame(context_result_rows)
     market_date = pd.Timestamp(data.index.get_level_values("date").max()).date().isoformat()
     OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
+    pd.DataFrame([dataset_provenance(data)]).to_csv(
+        OUTPUT_DIR / "data_provenance.csv", index=False
+    )
     experiment_registry(market_date).to_csv(
         OUTPUT_DIR / "experiment_registry.csv", index=False
     )

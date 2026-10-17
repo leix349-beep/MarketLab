@@ -3,7 +3,8 @@ import numpy as np
 import pandas as pd
 from unittest.mock import patch
 from model_training import (CONTEXT_FEATURES, FEATURES, RISK_FEATURES, build_context_features,
-                            build_features, chronological_evaluation, downside_risk_evaluation,
+                            build_features, chronological_evaluation, dataset_provenance,
+                            downside_risk_evaluation,
                             download_dataset, performance_metrics, portfolio_regime_evaluation,
                             regime_stability_evaluation, roc_auc, select_risk_threshold,
                             volatility_target_robustness, multi_asset_allocation_evaluation,
@@ -18,6 +19,22 @@ from model_training import (CONTEXT_FEATURES, FEATURES, RISK_FEATURES, build_con
 
 
 class ModelTrainingTests(unittest.TestCase):
+    def test_dataset_fingerprint_is_stable_and_detects_revision(self):
+        dates = pd.bdate_range("2026-01-01", periods=3)
+        frame = pd.DataFrame({
+            "date": [dates[0], dates[1], dates[2]],
+            "ticker_id": ["SPY", "SPY", "SPY"],
+            "future_return": [0.01, -0.02, 0.03],
+        }).set_index(["date", "ticker_id"])
+        first = dataset_provenance(frame)
+        shuffled = dataset_provenance(frame.sample(frac=1, random_state=2))
+        self.assertEqual(first["data_sha256"], shuffled["data_sha256"])
+        revised = frame.copy()
+        revised.iloc[1, 0] = -0.021
+        self.assertNotEqual(first["data_sha256"], dataset_provenance(revised)["data_sha256"])
+        self.assertEqual(first["rows"], 3)
+        self.assertEqual(first["tickers"], 1)
+
     def test_experiment_registry_is_unique_and_keeps_rejections(self):
         registry = experiment_registry("2026-10-09")
         self.assertTrue(registry["experiment_id"].is_unique)
