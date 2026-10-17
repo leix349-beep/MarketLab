@@ -44,7 +44,7 @@ Chronological out-of-sample research result. This model does not place orders.
 | IWM | 19.9% | 0.432 | 2.6% | 7.5% | 0.1% | 0.11 | 0.60 | -45.6% | -31.0% |
 | XLK | 21.6% | 0.488 | 11.9% | 13.6% | 13.7% | 0.71 | 0.99 | -37.0% | -31.6% |
 | XLF | 15.6% | 0.504 | 3.7% | 3.7% | 13.2% | 0.75 | 0.88 | -25.0% | -24.9% |
-| XLE | 23.6% | 0.464 | 9.0% | 10.0% | 15.7% | 0.68 | 0.99 | -26.3% | -26.3% |
+| XLE | 23.6% | 0.463 | 8.7% | 9.7% | 15.7% | 0.68 | 0.99 | -26.3% | -26.3% |
 
 ## Cross-Asset Risk Candidate: REJECTED AS A TRADING MODEL
 
@@ -61,7 +61,7 @@ Uses credit versus Treasuries, the dollar, gold, VIX, SPY trend and market bread
 | IWM | 0.443 | 38.4% | 34.4% | 0.28 | 4.1% | 5.6% | 0.40 | 0.60 | -42.4% | -31.0% |
 | XLK | 0.479 | 26.6% | 33.4% | 0.26 | 0.0% | 6.6% | 0.42 | 0.99 | -31.6% | -31.6% |
 | XLF | 0.548 | 30.6% | 31.5% | 0.29 | 4.1% | -0.6% | 0.04 | 0.88 | -35.7% | -24.9% |
-| XLE | 0.466 | 28.1% | 29.6% | 0.39 | 8.1% | 7.7% | 0.43 | 0.99 | -30.3% | -26.3% |
+| XLE | 0.464 | 24.8% | 25.7% | 0.40 | 8.1% | 9.9% | 0.50 | 0.99 | -30.3% | -26.3% |
 
 
 ## Portfolio Regime Candidate: REJECTED AS A TRADING MODEL
@@ -210,6 +210,17 @@ The trend rule, defensive basket, rebalance interval and costs are unchanged. On
 | 25% | 18.5% | 7.8% | 6.9% | 1.13 | -12.7% | -2.3% | 9 / 10 | 6 / 10 |
 | 50% | 37.0% | 9.2% | 8.5% | 1.09 | -16.0% | -2.9% | 9 / 10 | 4 / 10 |
 | 75% | 55.5% | 10.6% | 10.3% | 1.04 | -19.3% | -3.6% | 8 / 10 | 4 / 10 |
+
+
+## External Growth-Sleeve Validation
+
+The three U.S.-declared sleeve sizes are applied unchanged to EFA, EEM, EWJ and VGK. Averages summarize the four markets; no regional retuning is performed.
+
+| Max growth sleeve | Avg annual return | Avg Sharpe | Worst market DD | Markets higher Sharpe | Markets smaller DD | Markets smaller tail loss | Markets winning most years |
+|---:|---:|---:|---:|---:|---:|---:|---:|
+| 25% | 5.0% | 0.83 | -12.2% | 4 / 4 | 4 / 4 | 4 / 4 | 4 / 4 |
+| 50% | 4.8% | 0.63 | -15.8% | 4 / 4 | 4 / 4 | 4 / 4 | 2 / 4 |
+| 75% | 4.5% | 0.49 | -19.2% | 1 / 4 | 4 / 4 | 4 / 4 | 0 / 4 |
 
 
 ## External-Market Validation: FAIL

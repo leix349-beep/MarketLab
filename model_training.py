@@ -633,6 +633,45 @@ def external_market_validation(data: pd.DataFrame) -> pd.DataFrame:
     return pd.DataFrame(rows)
 
 
+def external_growth_sleeve_frontier(data: pd.DataFrame) -> pd.DataFrame:
+    """Apply each predeclared growth sleeve to untouched regional markets."""
+    rows = []
+    defensive_assets = ("TLT", "HYG", "GLD", "UUP")
+    for sleeve in (0.25, 0.50, 0.75):
+        for growth_ticker in EXTERNAL_GROWTH_TICKERS:
+            universe = (growth_ticker, *defensive_assets)
+            _, summary = dynamic_growth_defense_evaluation(
+                data, tickers=universe, growth_ticker=growth_ticker,
+                growth_sleeve=sleeve
+            )
+            if summary.empty:
+                continue
+            full = summary[summary["scope"] == "Full history"].set_index("strategy")
+            yearly = summary[summary["scope"] == "Calendar year"].pivot(
+                index="period", columns="strategy", values="sharpe"
+            )
+            candidate = full.loc["dynamic_growth_defense"]
+            benchmark = full.loc["spy"]
+            rows.append({
+                "growth_sleeve": sleeve,
+                "market": growth_ticker,
+                "observations": int(candidate["observations"]),
+                "annual_return": candidate["annual_return"],
+                "sharpe": candidate["sharpe"],
+                "drawdown": candidate["drawdown"],
+                "expected_shortfall_5": candidate["expected_shortfall_5"],
+                "benchmark_annual_return": benchmark["annual_return"],
+                "benchmark_sharpe": benchmark["sharpe"],
+                "benchmark_drawdown": benchmark["drawdown"],
+                "benchmark_expected_shortfall_5": benchmark["expected_shortfall_5"],
+                "years_higher_sharpe": int(
+                    (yearly["dynamic_growth_defense"] > yearly["spy"]).sum()
+                ),
+                "years_tested": int(len(yearly)),
+            })
+    return pd.DataFrame(rows)
+
+
 def dynamic_allocation_sensitivity(data: pd.DataFrame) -> pd.DataFrame:
     """Stress the fixed dynamic rule across costs and rebalance intervals."""
     rows = []
@@ -745,6 +784,7 @@ def render_report(results: pd.DataFrame, risk_results: pd.DataFrame,
                   dynamic_uncertainty: pd.DataFrame,
                   dynamic_sensitivity: pd.DataFrame,
                   growth_frontier: pd.DataFrame,
+                  external_growth_frontier: pd.DataFrame,
                   external_results: pd.DataFrame,
                   coefficients: pd.Series, market_date: str) -> str:
     rows = "\n".join(f"| {name} | {value:+.4f} |" for name, value in coefficients.items())
@@ -1050,6 +1090,34 @@ The trend rule, defensive basket, rebalance interval and costs are unchanged. On
 |---:|---:|---:|---:|---:|---:|---:|---:|---:|
 {frontier_rows}
 """
+    if external_growth_frontier.empty:
+        external_frontier_section = """## External Growth-Sleeve Validation: NOT RUN
+
+The required regional ETF histories were unavailable.
+"""
+    else:
+        external_frontier_rows = []
+        for sleeve, group in external_growth_frontier.groupby("growth_sleeve"):
+            sharpe_wins = int((group["sharpe"] > group["benchmark_sharpe"]).sum())
+            drawdown_wins = int((group["drawdown"] > group["benchmark_drawdown"]).sum())
+            tail_wins = int((group["expected_shortfall_5"] >
+                             group["benchmark_expected_shortfall_5"]).sum())
+            majority_years = int((group["years_higher_sharpe"] * 2 >=
+                                  group["years_tested"]).sum())
+            external_frontier_rows.append(
+                f"| {sleeve:.0%} | {group['annual_return'].mean():.1%} | "
+                f"{group['sharpe'].mean():.2f} | {group['drawdown'].min():.1%} | "
+                f"{sharpe_wins} / {len(group)} | {drawdown_wins} / {len(group)} | "
+                f"{tail_wins} / {len(group)} | {majority_years} / {len(group)} |"
+            )
+        external_frontier_section = f"""## External Growth-Sleeve Validation
+
+The three U.S.-declared sleeve sizes are applied unchanged to EFA, EEM, EWJ and VGK. Averages summarize the four markets; no regional retuning is performed.
+
+| Max growth sleeve | Avg annual return | Avg Sharpe | Worst market DD | Markets higher Sharpe | Markets smaller DD | Markets smaller tail loss | Markets winning most years |
+|---:|---:|---:|---:|---:|---:|---:|---:|
+{chr(10).join(external_frontier_rows)}
+"""
     if external_results.empty:
         external_section = """## External-Market Validation: NOT RUN
 
@@ -1135,6 +1203,8 @@ Chronological out-of-sample research result. This model does not place orders.
 
 {frontier_section}
 
+{external_frontier_section}
+
 {external_section}
 
 ## Latest standardized coefficients
@@ -1167,6 +1237,7 @@ def main() -> None:
     dynamic_uncertainty = dynamic_allocation_uncertainty(dynamic_predictions)
     dynamic_sensitivity = dynamic_allocation_sensitivity(data)
     growth_frontier = growth_sleeve_frontier(data)
+    external_growth_frontier = external_growth_sleeve_frontier(data)
     external_results = external_market_validation(data)
     coefficient_parts = []
     available_tickers = [ticker for ticker in TRAIN_TICKERS
@@ -1267,13 +1338,16 @@ def main() -> None:
     growth_frontier.assign(market_date=market_date).to_csv(
         OUTPUT_DIR / "latest_growth_sleeve_frontier.csv", index=False
     )
+    external_growth_frontier.assign(market_date=market_date).to_csv(
+        OUTPUT_DIR / "latest_external_growth_sleeve_frontier.csv", index=False
+    )
     external_results.assign(market_date=market_date).to_csv(
         OUTPUT_DIR / "latest_external_validation.csv", index=False
     )
     report = render_report(results, risk_results, context_results, portfolio_result,
                            regime_results, volatility_results, allocation_results, diversified_results,
                            dynamic_results, dynamic_uncertainty, dynamic_sensitivity, growth_frontier,
-                           external_results,
+                           external_growth_frontier, external_results,
                            coefficients, market_date)
     (OUTPUT_DIR / "latest.md").write_text(report, encoding="utf-8")
     history = OUTPUT_DIR / "history"

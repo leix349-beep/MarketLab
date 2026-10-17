@@ -9,6 +9,7 @@ from model_training import (CONTEXT_FEATURES, FEATURES, RISK_FEATURES, build_con
                             volatility_target_robustness, multi_asset_allocation_evaluation,
                             dynamic_growth_defense_evaluation, dynamic_allocation_uncertainty,
                             growth_sleeve_frontier,
+                            external_growth_sleeve_frontier,
                             block_bootstrap_sharpe_difference, dynamic_allocation_sensitivity,
                             external_market_validation)
 
@@ -241,6 +242,11 @@ class ModelTrainingTests(unittest.TestCase):
         result = external_market_validation(panel)
         self.assertEqual(set(result["market"]), {"EFA", "EEM", "EWJ", "VGK"})
         self.assertTrue((result["years_tested"] >= 5).all())
+        frontier = external_growth_sleeve_frontier(panel)
+        self.assertEqual(len(frontier), 12)
+        self.assertEqual(set(frontier["growth_sleeve"]), {0.25, 0.5, 0.75})
+        self.assertEqual(set(frontier["market"]), {"EFA", "EEM", "EWJ", "VGK"})
+        self.assertTrue(np.isfinite(frontier.select_dtypes(include=["number"])).all().all())
 
 
 if __name__ == "__main__":
