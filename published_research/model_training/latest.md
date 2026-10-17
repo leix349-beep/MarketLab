@@ -223,6 +223,26 @@ The three U.S.-declared sleeve sizes are applied unchanged to EFA, EEM, EWJ and 
 | 75% | 4.5% | 0.49 | -19.2% | 1 / 4 | 4 / 4 | 4 / 4 | 0 / 4 |
 
 
+## Growth-Sleeve Statistical Uncertainty
+
+- Comparisons with a 95% interval entirely above zero: **8 / 10**
+
+| Market | Comparison | Median Sharpe difference | 95% interval | Probability 25% is higher |
+|---|---|---:|---:|---:|
+| SPY | 25% vs 50% | +0.04 | [-0.10, +0.16] | 70.6% |
+| SPY | 25% vs 75% | +0.09 | [-0.14, +0.30] | 77.6% |
+| EFA | 25% vs 50% | +0.21 | [+0.04, +0.36] | 99.4% |
+| EFA | 25% vs 75% | +0.36 | [+0.09, +0.60] | 99.5% |
+| EEM | 25% vs 50% | +0.21 | [+0.07, +0.35] | 99.8% |
+| EEM | 25% vs 75% | +0.35 | [+0.13, +0.57] | 100.0% |
+| EWJ | 25% vs 50% | +0.18 | [+0.03, +0.34] | 98.9% |
+| EWJ | 25% vs 75% | +0.31 | [+0.07, +0.56] | 99.4% |
+| VGK | 25% vs 50% | +0.20 | [+0.03, +0.36] | 99.1% |
+| VGK | 25% vs 75% | +0.35 | [+0.08, +0.61] | 99.6% |
+
+Paired circular-block resampling preserves four adjacent five-session observations. The 25% sleeve is not promoted unless the evidence is stable beyond point estimates.
+
+
 ## External-Market Validation: FAIL
 
 The U.S.-designed rule is frozen and applied without retuning to developed ex-U.S., emerging markets, Japan and Europe.

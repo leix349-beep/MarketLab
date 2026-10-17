@@ -724,6 +724,39 @@ def block_bootstrap_sharpe_difference(candidate: pd.Series, benchmark: pd.Series
             "block_size": block_size}
 
 
+def growth_sleeve_uncertainty(data: pd.DataFrame, samples: int = 1000) -> pd.DataFrame:
+    """Test whether the 25% sleeve has a credible Sharpe edge over larger sleeves."""
+    rows = []
+    markets = (("SPY", DIVERSIFIED_TICKERS),) + tuple(
+        (ticker, (ticker, "TLT", "HYG", "GLD", "UUP"))
+        for ticker in EXTERNAL_GROWTH_TICKERS
+    )
+    for market, universe in markets:
+        candidate, _ = dynamic_growth_defense_evaluation(
+            data, tickers=universe, growth_ticker=market, growth_sleeve=0.25
+        )
+        if candidate.empty:
+            continue
+        for comparison in (0.50, 0.75):
+            benchmark, _ = dynamic_growth_defense_evaluation(
+                data, tickers=universe, growth_ticker=market,
+                growth_sleeve=comparison
+            )
+            if benchmark.empty:
+                continue
+            result = block_bootstrap_sharpe_difference(
+                candidate["dynamic_growth_defense"],
+                benchmark["dynamic_growth_defense"], samples=samples
+            )
+            rows.append({
+                "market": market,
+                "candidate_sleeve": 0.25,
+                "comparison_sleeve": comparison,
+                **result,
+            })
+    return pd.DataFrame(rows)
+
+
 def dynamic_allocation_uncertainty(returns: pd.DataFrame) -> pd.DataFrame:
     """Quantify uncertainty in the dynamic candidate versus each baseline."""
     if returns.empty or "dynamic_growth_defense" not in returns:
@@ -785,6 +818,7 @@ def render_report(results: pd.DataFrame, risk_results: pd.DataFrame,
                   dynamic_sensitivity: pd.DataFrame,
                   growth_frontier: pd.DataFrame,
                   external_growth_frontier: pd.DataFrame,
+                  growth_uncertainty: pd.DataFrame,
                   external_results: pd.DataFrame,
                   coefficients: pd.Series, market_date: str) -> str:
     rows = "\n".join(f"| {name} | {value:+.4f} |" for name, value in coefficients.items())
@@ -1118,6 +1152,29 @@ The three U.S.-declared sleeve sizes are applied unchanged to EFA, EEM, EWJ and 
 |---:|---:|---:|---:|---:|---:|---:|---:|
 {chr(10).join(external_frontier_rows)}
 """
+    if growth_uncertainty.empty:
+        growth_uncertainty_section = """## Growth-Sleeve Statistical Uncertainty: NOT RUN
+
+Insufficient paired observations were available.
+"""
+    else:
+        significant = int((growth_uncertainty["lower_95"] > 0).sum())
+        uncertainty_rows = "\n".join(
+            f"| {row.market} | 25% vs {row.comparison_sleeve:.0%} | "
+            f"{row.median:+.2f} | [{row.lower_95:+.2f}, {row.upper_95:+.2f}] | "
+            f"{row.probability_positive:.1%} |"
+            for row in growth_uncertainty.itertuples(index=False)
+        )
+        growth_uncertainty_section = f"""## Growth-Sleeve Statistical Uncertainty
+
+- Comparisons with a 95% interval entirely above zero: **{significant} / {len(growth_uncertainty)}**
+
+| Market | Comparison | Median Sharpe difference | 95% interval | Probability 25% is higher |
+|---|---|---:|---:|---:|
+{uncertainty_rows}
+
+Paired circular-block resampling preserves four adjacent five-session observations. The 25% sleeve is not promoted unless the evidence is stable beyond point estimates.
+"""
     if external_results.empty:
         external_section = """## External-Market Validation: NOT RUN
 
@@ -1205,6 +1262,8 @@ Chronological out-of-sample research result. This model does not place orders.
 
 {external_frontier_section}
 
+{growth_uncertainty_section}
+
 {external_section}
 
 ## Latest standardized coefficients
@@ -1238,6 +1297,7 @@ def main() -> None:
     dynamic_sensitivity = dynamic_allocation_sensitivity(data)
     growth_frontier = growth_sleeve_frontier(data)
     external_growth_frontier = external_growth_sleeve_frontier(data)
+    growth_uncertainty = growth_sleeve_uncertainty(data)
     external_results = external_market_validation(data)
     coefficient_parts = []
     available_tickers = [ticker for ticker in TRAIN_TICKERS
@@ -1341,13 +1401,16 @@ def main() -> None:
     external_growth_frontier.assign(market_date=market_date).to_csv(
         OUTPUT_DIR / "latest_external_growth_sleeve_frontier.csv", index=False
     )
+    growth_uncertainty.assign(market_date=market_date).to_csv(
+        OUTPUT_DIR / "latest_growth_sleeve_uncertainty.csv", index=False
+    )
     external_results.assign(market_date=market_date).to_csv(
         OUTPUT_DIR / "latest_external_validation.csv", index=False
     )
     report = render_report(results, risk_results, context_results, portfolio_result,
                            regime_results, volatility_results, allocation_results, diversified_results,
                            dynamic_results, dynamic_uncertainty, dynamic_sensitivity, growth_frontier,
-                           external_growth_frontier, external_results,
+                           external_growth_frontier, growth_uncertainty, external_results,
                            coefficients, market_date)
     (OUTPUT_DIR / "latest.md").write_text(report, encoding="utf-8")
     history = OUTPUT_DIR / "history"

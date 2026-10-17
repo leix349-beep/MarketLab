@@ -10,6 +10,7 @@ from model_training import (CONTEXT_FEATURES, FEATURES, RISK_FEATURES, build_con
                             dynamic_growth_defense_evaluation, dynamic_allocation_uncertainty,
                             growth_sleeve_frontier,
                             external_growth_sleeve_frontier,
+                            growth_sleeve_uncertainty,
                             block_bootstrap_sharpe_difference, dynamic_allocation_sensitivity,
                             external_market_validation)
 
@@ -215,6 +216,9 @@ class ModelTrainingTests(unittest.TestCase):
         self.assertTrue(np.isfinite(frontier.select_dtypes(include=["number"])).all().all())
         with self.assertRaises(ValueError):
             dynamic_growth_defense_evaluation(panel, growth_sleeve=1.1)
+        sleeve_uncertainty = growth_sleeve_uncertainty(panel, samples=100)
+        self.assertEqual(len(sleeve_uncertainty), 2)
+        self.assertEqual(set(sleeve_uncertainty["comparison_sleeve"]), {0.5, 0.75})
 
     def test_block_bootstrap_detects_clear_sharpe_advantage(self):
         rng = np.random.default_rng(22)
@@ -247,6 +251,9 @@ class ModelTrainingTests(unittest.TestCase):
         self.assertEqual(set(frontier["growth_sleeve"]), {0.25, 0.5, 0.75})
         self.assertEqual(set(frontier["market"]), {"EFA", "EEM", "EWJ", "VGK"})
         self.assertTrue(np.isfinite(frontier.select_dtypes(include=["number"])).all().all())
+        uncertainty = growth_sleeve_uncertainty(panel, samples=100)
+        self.assertEqual(len(uncertainty), 8)
+        self.assertEqual(set(uncertainty["market"]), {"EFA", "EEM", "EWJ", "VGK"})
 
 
 if __name__ == "__main__":
