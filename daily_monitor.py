@@ -206,7 +206,7 @@ def update_paper_scorecard() -> Path | None:
         for row in group.itertuples(index=False):
             entry_date = pd.Timestamp(row.entry_date)
             evaluation_date = pd.Timestamp(row.evaluation_date)
-            if last_evaluation is None or entry_date > last_evaluation:
+            if last_evaluation is None or entry_date >= last_evaluation:
                 independent_rows.append(row)
                 last_evaluation = evaluation_date
         independent = pd.DataFrame(independent_rows)
@@ -221,7 +221,14 @@ def update_paper_scorecard() -> Path | None:
         if independent_count >= 10:
             rng = np.random.default_rng(20261017)
             values = independent["excess_return"].to_numpy(dtype=float)
-            draws = rng.choice(values, size=(2000, independent_count), replace=True).mean(axis=1)
+            block_size = min(4, independent_count)
+            blocks_needed = int(np.ceil(independent_count / block_size))
+            offsets = np.arange(block_size)
+            draws = []
+            for _ in range(2000):
+                starts = rng.integers(0, independent_count, size=blocks_needed)
+                indices = ((starts[:, None] + offsets) % independent_count).ravel()
+                draws.append(values[indices[:independent_count]].mean())
             lower_95 = float(np.quantile(draws, 0.025))
         if independent_count < 30:
             review_status = "COLLECTING"
@@ -264,7 +271,7 @@ def update_paper_scorecard() -> Path | None:
         f"{table}\n\n"
         "Five-session outcomes from consecutive signal dates overlap, so they are not compounded. "
         "Model review requires at least 30 non-overlapping observations, a positive average excess "
-        "return, at least a 55% SPY win rate, and a positive 95% bootstrap lower bound. Passing only "
+        "return, at least a 55% SPY win rate, and a positive 95% four-block bootstrap lower bound. Passing only "
         "makes a candidate eligible for review; it never changes the model automatically. This is "
         "research, not live performance.\n",
         encoding="utf-8",

@@ -126,14 +126,17 @@ class DailyMonitorTests(unittest.TestCase):
                 {"signal_date": "2026-01-06", "candidate": "growth_25",
                  "entry_date": "2026-01-07", "evaluation_date": "2026-01-14",
                  "candidate_return": -0.01, "spy_return": 0.00, "excess_return": -0.01},
+                {"signal_date": "2026-01-12", "candidate": "growth_25",
+                 "entry_date": "2026-01-13", "evaluation_date": "2026-01-20",
+                 "candidate_return": 0.005, "spy_return": 0.004, "excess_return": 0.001},
             ]).to_csv(outcomes / "2026-01-05.csv", index=False)
             with patch("daily_monitor.PAPER_DIR", paper):
                 scorecard_path = update_paper_scorecard()
             scorecard = pd.read_csv(scorecard_path).iloc[0]
-            self.assertEqual(scorecard["observations"], 2)
+            self.assertEqual(scorecard["observations"], 3)
             self.assertAlmostEqual(scorecard["average_5d_return"], 0.005)
-            self.assertAlmostEqual(scorecard["spy_win_rate"], 0.5)
-            self.assertEqual(scorecard["non_overlapping_observations"], 1)
+            self.assertAlmostEqual(scorecard["spy_win_rate"], 2 / 3)
+            self.assertEqual(scorecard["non_overlapping_observations"], 2)
             self.assertEqual(scorecard["review_status"], "COLLECTING")
             self.assertNotIn("cumulative", pd.read_csv(scorecard_path).columns)
 
