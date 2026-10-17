@@ -7,5 +7,6 @@ Starting with the next new market date after the comparison was introduced, both
 - `signals/`: weights calculated only from information available on the signal date.
 - `outcomes/`: five-session results once enough later observations exist.
 - `latest.md`: the newest paper allocation and regime.
+- `scorecard.csv` and `scorecard.md`: aggregate mature outcomes by candidate without compounding overlapping five-session windows.
 
 To avoid same-close execution bias, scoring begins at the next archived market close. No historical signal is backfilled, no order is sent, and results are retained whether they win or lose.

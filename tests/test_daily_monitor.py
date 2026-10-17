@@ -6,7 +6,8 @@ from unittest.mock import patch
 import numpy as np
 import pandas as pd
 
-from daily_monitor import candidate_weights, markdown_report, score_mature_signal, summarize
+from daily_monitor import (candidate_weights, markdown_report, score_mature_signal, summarize,
+                           update_paper_scorecard)
 
 
 class DailyMonitorTests(unittest.TestCase):
@@ -113,6 +114,24 @@ class DailyMonitorTests(unittest.TestCase):
             self.assertEqual(set(outcomes.index), {"growth_25", "growth_50"})
             self.assertGreater(outcomes.loc["growth_50", "candidate_return"],
                                outcomes.loc["growth_25", "candidate_return"])
+
+    def test_scorecard_does_not_compound_overlapping_outcomes(self):
+        with TemporaryDirectory(dir=Path("tests")) as directory:
+            paper = Path(directory)
+            outcomes = paper / "outcomes"; outcomes.mkdir()
+            pd.DataFrame([
+                {"signal_date": "2026-01-05", "candidate": "growth_25",
+                 "candidate_return": 0.02, "spy_return": 0.01, "excess_return": 0.01},
+                {"signal_date": "2026-01-06", "candidate": "growth_25",
+                 "candidate_return": -0.01, "spy_return": 0.00, "excess_return": -0.01},
+            ]).to_csv(outcomes / "2026-01-05.csv", index=False)
+            with patch("daily_monitor.PAPER_DIR", paper):
+                scorecard_path = update_paper_scorecard()
+            scorecard = pd.read_csv(scorecard_path).iloc[0]
+            self.assertEqual(scorecard["observations"], 2)
+            self.assertAlmostEqual(scorecard["average_5d_return"], 0.005)
+            self.assertAlmostEqual(scorecard["spy_win_rate"], 0.5)
+            self.assertNotIn("cumulative", pd.read_csv(scorecard_path).columns)
 
 
 if __name__ == "__main__":

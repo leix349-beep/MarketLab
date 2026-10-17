@@ -184,6 +184,55 @@ def score_mature_signal(snapshot: pd.DataFrame) -> Path | None:
     return outcome_path
 
 
+def update_paper_scorecard() -> Path | None:
+    """Summarize frozen outcomes without compounding overlapping horizons."""
+    outcome_dir = PAPER_DIR / "outcomes"
+    paths = sorted(outcome_dir.glob("????-??-??.csv"))
+    if not paths:
+        return None
+    outcomes = pd.concat((pd.read_csv(path) for path in paths), ignore_index=True)
+    if "candidate" not in outcomes:
+        outcomes["candidate"] = "growth_50"
+    required = {"signal_date", "candidate", "candidate_return", "spy_return", "excess_return"}
+    if not required.issubset(outcomes.columns):
+        raise ValueError("Paper outcomes are missing required scorecard columns.")
+    outcomes = outcomes.drop_duplicates(["signal_date", "candidate"], keep="last")
+    rows = []
+    for candidate, group in outcomes.groupby("candidate", sort=True):
+        rows.append({
+            "candidate": candidate,
+            "observations": len(group),
+            "average_5d_return": group["candidate_return"].mean(),
+            "median_5d_return": group["candidate_return"].median(),
+            "positive_rate": (group["candidate_return"] > 0).mean(),
+            "spy_win_rate": (group["excess_return"] > 0).mean(),
+            "average_excess_return": group["excess_return"].mean(),
+            "worst_5d_return": group["candidate_return"].min(),
+        })
+    scorecard = pd.DataFrame(rows)
+    PAPER_DIR.mkdir(parents=True, exist_ok=True)
+    csv_path = PAPER_DIR / "scorecard.csv"
+    scorecard.to_csv(csv_path, index=False)
+    table = "\n".join(
+        f"| {row.candidate} | {row.observations} | {row.average_5d_return:.2%} | "
+        f"{row.median_5d_return:.2%} | {row.positive_rate:.1%} | "
+        f"{row.spy_win_rate:.1%} | {row.average_excess_return:+.2%} | "
+        f"{row.worst_5d_return:.2%} |"
+        for row in scorecard.itertuples(index=False)
+    )
+    (PAPER_DIR / "scorecard.md").write_text(
+        "# Prospective Paper Scorecard\n\n"
+        "| Candidate | Mature signals | Avg 5D return | Median 5D return | Positive rate | "
+        "Beat SPY | Avg excess | Worst 5D return |\n"
+        "|---|---:|---:|---:|---:|---:|---:|---:|\n"
+        f"{table}\n\n"
+        "Five-session outcomes from consecutive signal dates overlap, so they are not compounded "
+        "or treated as independent statistical samples. This is research, not live performance.\n",
+        encoding="utf-8",
+    )
+    return csv_path
+
+
 def markdown_report(snapshot: pd.DataFrame, factors: pd.DataFrame | None = None,
                     news: pd.DataFrame | None = None) -> str:
     market_date = snapshot["date"].max()
@@ -251,6 +300,7 @@ def main() -> None:
         # download without rewriting the immutable observation.
         record_paper_signal(snapshot)
         score_mature_signal(snapshot)
+        update_paper_scorecard()
         return
     try:
         factors = download_global_factors()
@@ -269,6 +319,7 @@ def main() -> None:
     (OUTPUT_DIR / f"{market_date}.md").write_text(markdown_report(snapshot, factors, news), encoding="utf-8")
     record_paper_signal(snapshot)
     score_mature_signal(snapshot)
+    update_paper_scorecard()
     print(f"Saved {len(snapshot)} observations for {market_date}.")
     print("Freshness is evaluated in the Daily Monitor; duplicate market dates are intentionally not recommitted.")
 
