@@ -1,6 +1,8 @@
 # Prospective paper tracking
 
-This folder records the frozen growth/defense candidate after each market close. It is an evaluation log, not a brokerage connection.
+This folder records frozen growth/defense candidates after each market close. It is an evaluation log, not a brokerage connection.
+
+Starting with the next new market date after the comparison was introduced, both the 25% conservative sleeve and the existing 50% sleeve are recorded in parallel. Older signals remain unchanged rather than being backfilled.
 
 - `signals/`: weights calculated only from information available on the signal date.
 - `outcomes/`: five-session results once enough later observations exist.

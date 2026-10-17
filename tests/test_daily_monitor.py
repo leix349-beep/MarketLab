@@ -51,6 +51,11 @@ class DailyMonitorTests(unittest.TestCase):
         self.assertAlmostEqual(weights["weight"].sum(), 1.0)
         self.assertTrue(weights["weight"].between(0, 1).all())
         self.assertEqual(set(weights["ticker"]), {"SPY", "IWM", "TLT", "HYG", "GLD", "UUP"})
+        conservative = candidate_weights(pd.DataFrame(rows), growth_sleeve=0.25)
+        self.assertEqual(set(conservative["candidate"]), {"growth_25"})
+        self.assertLessEqual(conservative["growth_share"].max(), 0.25)
+        with self.assertRaises(ValueError):
+            candidate_weights(pd.DataFrame(rows), growth_sleeve=1.1)
 
     def test_paper_outcome_uses_next_session_as_entry(self):
         with TemporaryDirectory(dir=Path("tests")) as directory:
@@ -76,6 +81,38 @@ class DailyMonitorTests(unittest.TestCase):
             outcome = pd.read_csv(outcome_path).iloc[0]
             self.assertEqual(outcome["entry_date"], dates[1].date().isoformat())
             self.assertAlmostEqual(outcome["candidate_return"], 106 / 101 - 1)
+
+    def test_paper_outcome_scores_parallel_candidates(self):
+        with TemporaryDirectory(dir=Path("tests")) as directory:
+            root = Path(directory)
+            daily = root / "daily"; daily.mkdir()
+            paper = root / "paper"; (paper / "signals").mkdir(parents=True)
+            dates = pd.bdate_range("2026-02-02", periods=7)
+            tickers = ("SPY", "IWM", "TLT", "HYG", "GLD", "UUP")
+            for day_number, date in enumerate(dates):
+                pd.DataFrame({
+                    "date": date.date().isoformat(), "ticker": tickers,
+                    "close": [100 + day_number, 100, 100, 100, 100, 100],
+                }).to_csv(daily / f"{date.date().isoformat()}.csv", index=False)
+            signal_rows = []
+            for candidate, spy_weight in (("growth_25", 0.25), ("growth_50", 0.50)):
+                other_weight = (1 - spy_weight) / 5
+                for ticker in tickers:
+                    signal_rows.append({
+                        "signal_date": dates[0].date().isoformat(),
+                        "candidate": candidate, "ticker": ticker,
+                        "weight": spy_weight if ticker == "SPY" else other_weight,
+                    })
+            pd.DataFrame(signal_rows).to_csv(
+                paper / "signals" / f"{dates[0].date().isoformat()}.csv", index=False
+            )
+            current = pd.read_csv(daily / f"{dates[-1].date().isoformat()}.csv")
+            with patch("daily_monitor.OUTPUT_DIR", daily), patch("daily_monitor.PAPER_DIR", paper):
+                outcome_path = score_mature_signal(current)
+            outcomes = pd.read_csv(outcome_path).set_index("candidate")
+            self.assertEqual(set(outcomes.index), {"growth_25", "growth_50"})
+            self.assertGreater(outcomes.loc["growth_50", "candidate_return"],
+                               outcomes.loc["growth_25", "candidate_return"])
 
 
 if __name__ == "__main__":

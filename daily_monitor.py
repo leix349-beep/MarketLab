@@ -79,8 +79,10 @@ def download_snapshot() -> pd.DataFrame:
     return pd.DataFrame(rows).sort_values("ticker").reset_index(drop=True)
 
 
-def candidate_weights(snapshot: pd.DataFrame) -> pd.DataFrame:
+def candidate_weights(snapshot: pd.DataFrame, growth_sleeve: float = 0.5) -> pd.DataFrame:
     """Freeze the current growth/defense weights without placing an order."""
+    if not 0 <= growth_sleeve <= 1:
+        raise ValueError("Growth sleeve must be between zero and one.")
     current = snapshot.set_index("ticker")
     missing = set(DIVERSIFIED_TICKERS) - set(current.index)
     if missing:
@@ -90,13 +92,14 @@ def candidate_weights(snapshot: pd.DataFrame) -> pd.DataFrame:
     defensive = inverse_vol / inverse_vol.sum()
     spy = sleeve.loc["SPY"]
     positive_trend = bool(spy["return_63d"] > 0 and spy["close"] > spy["ma200"])
-    growth_share = 0.5 if positive_trend else 0.0
+    growth_share = growth_sleeve if positive_trend else 0.0
     weights = defensive * (1 - growth_share)
     weights.loc["SPY"] += growth_share
     result = pd.DataFrame({
         "signal_date": snapshot["date"].max(),
         "ticker": weights.index,
         "weight": weights.values,
+        "candidate": f"growth_{int(growth_sleeve * 100):02d}",
         "growth_share": growth_share,
         "regime": "growth" if positive_trend else "defense",
     })
@@ -104,22 +107,34 @@ def candidate_weights(snapshot: pd.DataFrame) -> pd.DataFrame:
 
 
 def record_paper_signal(snapshot: pd.DataFrame) -> Path:
-    """Write one immutable end-of-day paper signal for prospective scoring."""
-    weights = candidate_weights(snapshot)
+    """Write immutable 25% and 50% paper candidates for prospective scoring."""
+    weights = pd.concat([
+        candidate_weights(snapshot, growth_sleeve=0.25),
+        candidate_weights(snapshot, growth_sleeve=0.50),
+    ], ignore_index=True)
     signal_date = str(weights["signal_date"].iloc[0])
     signal_dir = PAPER_DIR / "signals"
     signal_dir.mkdir(parents=True, exist_ok=True)
     path = signal_dir / f"{signal_date}.csv"
     if not path.exists():
         weights.to_csv(path, index=False)
-    allocation = ", ".join(
-        f"{row.ticker} {row.weight:.1%}" for row in weights.itertuples(index=False)
-    )
+    else:
+        weights = pd.read_csv(path)
+        if "candidate" not in weights:
+            weights["candidate"] = "growth_50"
+    sections = []
+    for candidate, group in weights.groupby("candidate", sort=True):
+        allocation = ", ".join(
+            f"{row.ticker} {row.weight:.1%}" for row in group.itertuples(index=False)
+        )
+        sections.append(
+            f"## {candidate.replace('_', ' ').title()}\n\n"
+            f"Regime: **{group['regime'].iloc[0]}** · Growth sleeve: "
+            f"**{group['growth_share'].iloc[0]:.0%}**\n\n{allocation}"
+        )
     (PAPER_DIR / "latest.md").write_text(
         f"# Paper Candidate — {signal_date}\n\n"
-        f"Regime: **{weights['regime'].iloc[0]}** · Growth sleeve: "
-        f"**{weights['growth_share'].iloc[0]:.0%}**\n\n"
-        f"{allocation}\n\nThis is a frozen research observation. No order is sent. "
+        f"{'\n\n'.join(sections)}\n\nThis is a frozen research observation. No order is sent. "
         "Scoring begins at the next archived close to avoid same-close execution bias.\n",
         encoding="utf-8",
     )
@@ -143,22 +158,29 @@ def score_mature_signal(snapshot: pd.DataFrame) -> Path | None:
         return outcome_path
     entry = pd.read_csv(entry_path).set_index("ticker")
     end = snapshot.set_index("ticker")
-    weights = pd.read_csv(signal_path).set_index("ticker")
-    tickers = list(weights.index)
+    weights = pd.read_csv(signal_path)
+    if "candidate" not in weights:
+        weights["candidate"] = "growth_50"
+    tickers = list(weights["ticker"].unique())
     if not set(tickers).issubset(entry.index) or not set(tickers).issubset(end.index):
         return None
     asset_returns = end.loc[tickers, "close"] / entry.loc[tickers, "close"] - 1
-    candidate_return = float((weights["weight"] * asset_returns).sum())
     benchmark_return = float(end.loc["SPY", "close"] / entry.loc["SPY", "close"] - 1)
-    pd.DataFrame([{
-        "signal_date": signal_snapshot_path.stem,
-        "entry_date": entry_path.stem,
-        "evaluation_date": snapshot["date"].max(),
-        "sessions": 5,
-        "candidate_return": candidate_return,
-        "spy_return": benchmark_return,
-        "excess_return": candidate_return - benchmark_return,
-    }]).to_csv(outcome_path, index=False)
+    rows = []
+    for candidate, group in weights.groupby("candidate", sort=True):
+        group = group.set_index("ticker")
+        candidate_return = float((group["weight"] * asset_returns.loc[group.index]).sum())
+        rows.append({
+            "signal_date": signal_snapshot_path.stem,
+            "entry_date": entry_path.stem,
+            "evaluation_date": snapshot["date"].max(),
+            "sessions": 5,
+            "candidate": candidate,
+            "candidate_return": candidate_return,
+            "spy_return": benchmark_return,
+            "excess_return": candidate_return - benchmark_return,
+        })
+    pd.DataFrame(rows).to_csv(outcome_path, index=False)
     return outcome_path
 
 
