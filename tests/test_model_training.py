@@ -11,6 +11,7 @@ from model_training import (CONTEXT_FEATURES, FEATURES, RISK_FEATURES, build_con
                             growth_sleeve_frontier,
                             external_growth_sleeve_frontier,
                             growth_sleeve_uncertainty,
+                            risk_aware_sleeve_validation,
                             block_bootstrap_sharpe_difference, dynamic_allocation_sensitivity,
                             external_market_validation)
 
@@ -192,6 +193,8 @@ class ModelTrainingTests(unittest.TestCase):
                 "vol_21": 0.08 + offset * 0.02,
                 "ret_63": np.sin(np.arange(len(dates)) / 45),
                 "ma200_gap": np.cos(np.arange(len(dates)) / 55),
+                "vix_level": 20 + 10 * (np.sin(np.arange(len(dates)) / 80) > 0),
+                "credit_vs_treasury_21": np.sin(np.arange(len(dates)) / 70),
                 "ticker_id": ticker,
             }, index=dates)
             parts.append(frame.set_index("ticker_id", append=True))
@@ -216,6 +219,12 @@ class ModelTrainingTests(unittest.TestCase):
         self.assertTrue(np.isfinite(frontier.select_dtypes(include=["number"])).all().all())
         with self.assertRaises(ValueError):
             dynamic_growth_defense_evaluation(panel, growth_sleeve=1.1)
+        with self.assertRaises(ValueError):
+            dynamic_growth_defense_evaluation(panel, growth_sleeve=0.5, cautious_sleeve=0.75)
+        cautious_returns, _ = dynamic_growth_defense_evaluation(
+            panel, growth_sleeve=0.5, cautious_sleeve=0.25
+        )
+        self.assertTrue(cautious_returns["growth_share"].isin([0.0, 0.25, 0.5]).all())
         sleeve_uncertainty = growth_sleeve_uncertainty(panel, samples=100)
         self.assertEqual(len(sleeve_uncertainty), 2)
         self.assertEqual(set(sleeve_uncertainty["comparison_sleeve"]), {0.5, 0.75})
@@ -238,6 +247,8 @@ class ModelTrainingTests(unittest.TestCase):
                 "vol_21": 0.08 + offset * 0.01,
                 "ret_63": np.sin(np.arange(len(dates)) / 45),
                 "ma200_gap": np.cos(np.arange(len(dates)) / 55),
+                "vix_level": 20 + 10 * (np.sin(np.arange(len(dates)) / 80) > 0),
+                "credit_vs_treasury_21": np.sin(np.arange(len(dates)) / 70),
                 "ticker_id": ticker,
             }, index=dates)
             parts.append(frame.set_index("ticker_id", append=True))
@@ -254,6 +265,11 @@ class ModelTrainingTests(unittest.TestCase):
         uncertainty = growth_sleeve_uncertainty(panel, samples=100)
         self.assertEqual(len(uncertainty), 8)
         self.assertEqual(set(uncertainty["market"]), {"EFA", "EEM", "EWJ", "VGK"})
+        risk_aware = risk_aware_sleeve_validation(panel)
+        self.assertEqual(len(risk_aware), 12)
+        self.assertEqual(set(risk_aware["strategy"]),
+                         {"risk_aware_25_50", "fixed_25", "fixed_50"})
+        self.assertTrue(np.isfinite(risk_aware.select_dtypes(include=["number"])).all().all())
 
 
 if __name__ == "__main__":

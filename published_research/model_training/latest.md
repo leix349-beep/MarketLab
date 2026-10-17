@@ -35,7 +35,7 @@ Chronological out-of-sample research result. This model does not place orders.
 
 - Assets with ROC AUC above 0.52: **2 / 6**
 - Assets with higher Sharpe than buy and hold: **0 / 6**
-- Assets with smaller maximum drawdown: **0 / 6**
+- Assets with smaller maximum drawdown: **1 / 6**
 
 | Asset | Risk event rate | ROC AUC | Risk recall | Exit rate | Ann. return | Model Sharpe | B&H Sharpe | Model DD | B&H DD |
 |---|---:|---:|---:|---:|---:|---:|---:|---:|---:|
@@ -43,7 +43,7 @@ Chronological out-of-sample research result. This model does not place orders.
 | QQQ | 20.1% | 0.538 | 17.3% | 17.0% | 7.4% | 0.47 | 0.89 | -42.4% | -34.6% |
 | IWM | 19.9% | 0.432 | 2.6% | 7.5% | 0.1% | 0.11 | 0.60 | -45.6% | -31.0% |
 | XLK | 21.6% | 0.488 | 11.9% | 13.6% | 13.7% | 0.71 | 0.99 | -37.0% | -31.6% |
-| XLF | 15.6% | 0.504 | 3.7% | 3.7% | 13.2% | 0.75 | 0.88 | -25.0% | -24.9% |
+| XLF | 15.5% | 0.501 | 3.3% | 3.3% | 13.6% | 0.77 | 0.88 | -24.3% | -24.9% |
 | XLE | 23.6% | 0.463 | 8.7% | 9.7% | 15.7% | 0.68 | 0.99 | -26.3% | -26.3% |
 
 ## Cross-Asset Risk Candidate: REJECTED AS A TRADING MODEL
@@ -60,7 +60,7 @@ Uses credit versus Treasuries, the dollar, gold, VIX, SPY trend and market bread
 | QQQ | 0.522 | 31.6% | 28.8% | 0.28 | 0.0% | 10.0% | 0.62 | 0.89 | -25.4% | -34.6% |
 | IWM | 0.443 | 38.4% | 34.4% | 0.28 | 4.1% | 5.6% | 0.40 | 0.60 | -42.4% | -31.0% |
 | XLK | 0.479 | 26.6% | 33.4% | 0.26 | 0.0% | 6.6% | 0.42 | 0.99 | -31.6% | -31.6% |
-| XLF | 0.548 | 30.6% | 31.5% | 0.29 | 4.1% | -0.6% | 0.04 | 0.88 | -35.7% | -24.9% |
+| XLF | 0.544 | 29.0% | 29.0% | 0.30 | 4.1% | 0.7% | 0.13 | 0.88 | -35.7% | -24.9% |
 | XLE | 0.464 | 24.8% | 25.7% | 0.40 | 8.1% | 9.9% | 0.50 | 0.99 | -30.3% | -26.3% |
 
 
@@ -241,6 +241,22 @@ The three U.S.-declared sleeve sizes are applied unchanged to EFA, EEM, EWJ and 
 | VGK | 25% vs 75% | +0.35 | [+0.08, +0.61] | 99.6% |
 
 Paired circular-block resampling preserves four adjacent five-session observations. The 25% sleeve is not promoted unless the evidence is stable beyond point estimates.
+
+
+## Risk-Aware 25% / 50% Growth Sleeve: REJECTED AS A REPLACEMENT
+
+The sleeve is 50% only when trend is positive and neither VIX is at least 25 nor credit underperforms Treasuries; under either stress flag it falls to 25%, and under negative trend it falls to zero. Thresholds were fixed before this test.
+
+- Highest Sharpe versus both fixed sleeves: **0 / 5** markets
+- Smallest drawdown versus both fixed sleeves: **0 / 5** markets
+
+| Market | Avg growth exposure | Annual return | Sharpe | Maximum drawdown | Worst-5% average | Fixed 25% Sharpe | Fixed 50% Sharpe |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| SPY | 29.4% | 8.4% | 1.07 | -12.7% | -2.7% | 1.13 | 1.09 |
+| EFA | 25.6% | 4.4% | 0.67 | -11.3% | -2.2% | 0.83 | 0.63 |
+| EEM | 22.5% | 5.0% | 0.65 | -11.9% | -2.6% | 0.77 | 0.56 |
+| EWJ | 24.9% | 6.3% | 0.85 | -14.5% | -2.4% | 0.91 | 0.73 |
+| VGK | 25.2% | 4.1% | 0.63 | -11.0% | -2.3% | 0.83 | 0.63 |
 
 
 ## External-Market Validation: FAIL

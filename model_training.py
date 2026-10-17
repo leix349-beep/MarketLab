@@ -497,13 +497,18 @@ def dynamic_growth_defense_evaluation(data: pd.DataFrame, fee: float = 0.001,
                                       tickers: tuple[str, ...] = DIVERSIFIED_TICKERS,
                                       growth_ticker: str = "SPY",
                                       growth_sleeve: float = 0.5,
+                                      cautious_sleeve: float | None = None,
                                       ) -> tuple[pd.DataFrame, pd.DataFrame]:
     """Switch a fixed growth sleeve into a diversified defensive sleeve."""
     if rebalance_every < 1:
         raise ValueError("Rebalance interval must be at least one five-session block.")
     if not 0 <= growth_sleeve <= 1:
         raise ValueError("Growth sleeve must be between zero and one.")
+    if cautious_sleeve is not None and not 0 <= cautious_sleeve <= growth_sleeve:
+        raise ValueError("Cautious sleeve must be between zero and the growth sleeve.")
     required = {"future_return", "vol_21", "ret_63", "ma200_gap"}
+    if cautious_sleeve is not None:
+        required |= {"vix_level", "credit_vs_treasury_21"}
     if not required.issubset(data.columns):
         raise ValueError("Dynamic allocation is missing required observable features.")
     expected_tickers = tuple(tickers)
@@ -525,7 +530,13 @@ def dynamic_growth_defense_evaluation(data: pd.DataFrame, fee: float = 0.001,
     static_blend = growth_sleeve * growth + (1 - growth_sleeve) * defensive
     positive_trend = ((panels["ret_63"].loc[dates, growth_ticker] > 0) &
                       (panels["ma200_gap"].loc[dates, growth_ticker] > 0)).astype(float)
-    growth_share = positive_trend * growth_sleeve
+    if cautious_sleeve is None:
+        growth_share = positive_trend * growth_sleeve
+    else:
+        stressed = ((panels["vix_level"].loc[dates, growth_ticker] >= 25) |
+                    (panels["credit_vs_treasury_21"].loc[dates, growth_ticker] < 0))
+        sleeve = pd.Series(np.where(stressed, cautious_sleeve, growth_sleeve), index=dates)
+        growth_share = positive_trend * sleeve
     dynamic = defensive.mul(1 - growth_share, axis=0) + growth.mul(growth_share, axis=0)
 
     def hold_weights(weights: pd.DataFrame) -> pd.DataFrame:
@@ -668,6 +679,52 @@ def external_growth_sleeve_frontier(data: pd.DataFrame) -> pd.DataFrame:
                     (yearly["dynamic_growth_defense"] > yearly["spy"]).sum()
                 ),
                 "years_tested": int(len(yearly)),
+            })
+    return pd.DataFrame(rows)
+
+
+def risk_aware_sleeve_validation(data: pd.DataFrame) -> pd.DataFrame:
+    """Validate a fixed 50% sleeve that de-risks to 25% under observable stress."""
+    rows = []
+    markets = (("SPY", DIVERSIFIED_TICKERS),) + tuple(
+        (ticker, (ticker, "TLT", "HYG", "GLD", "UUP"))
+        for ticker in EXTERNAL_GROWTH_TICKERS
+    )
+    for market, universe in markets:
+        adaptive, adaptive_summary = dynamic_growth_defense_evaluation(
+            data, tickers=universe, growth_ticker=market,
+            growth_sleeve=0.50, cautious_sleeve=0.25
+        )
+        fixed_25, fixed_25_summary = dynamic_growth_defense_evaluation(
+            data, tickers=universe, growth_ticker=market, growth_sleeve=0.25
+        )
+        fixed_50, fixed_50_summary = dynamic_growth_defense_evaluation(
+            data, tickers=universe, growth_ticker=market, growth_sleeve=0.50
+        )
+        if adaptive.empty or fixed_25.empty or fixed_50.empty:
+            continue
+        summaries = {
+            "risk_aware_25_50": adaptive_summary,
+            "fixed_25": fixed_25_summary,
+            "fixed_50": fixed_50_summary,
+        }
+        for strategy, summary in summaries.items():
+            full = summary[(summary["scope"] == "Full history") &
+                           (summary["strategy"] == "dynamic_growth_defense")].iloc[0]
+            rows.append({
+                "market": market,
+                "strategy": strategy,
+                "observations": int(full["observations"]),
+                "annual_return": full["annual_return"],
+                "volatility": full["volatility"],
+                "sharpe": full["sharpe"],
+                "drawdown": full["drawdown"],
+                "expected_shortfall_5": full["expected_shortfall_5"],
+                "average_growth_share": float({
+                    "risk_aware_25_50": adaptive,
+                    "fixed_25": fixed_25,
+                    "fixed_50": fixed_50,
+                }[strategy]["growth_share"].mean()),
             })
     return pd.DataFrame(rows)
 
@@ -819,6 +876,7 @@ def render_report(results: pd.DataFrame, risk_results: pd.DataFrame,
                   growth_frontier: pd.DataFrame,
                   external_growth_frontier: pd.DataFrame,
                   growth_uncertainty: pd.DataFrame,
+                  risk_aware_results: pd.DataFrame,
                   external_results: pd.DataFrame,
                   coefficients: pd.Series, market_date: str) -> str:
     rows = "\n".join(f"| {name} | {value:+.4f} |" for name, value in coefficients.items())
@@ -1175,6 +1233,41 @@ Insufficient paired observations were available.
 
 Paired circular-block resampling preserves four adjacent five-session observations. The 25% sleeve is not promoted unless the evidence is stable beyond point estimates.
 """
+    if risk_aware_results.empty:
+        risk_aware_section = """## Risk-Aware Growth Sleeve: NOT RUN
+
+The required VIX or credit history was unavailable.
+"""
+    else:
+        risk_aware_rows = []
+        sharpe_wins = 0
+        drawdown_wins = 0
+        for market, group in risk_aware_results.groupby("market", sort=False):
+            indexed = group.set_index("strategy")
+            adaptive = indexed.loc["risk_aware_25_50"]
+            alternatives = indexed.loc[["fixed_25", "fixed_50"]]
+            sharpe_wins += int(adaptive["sharpe"] > alternatives["sharpe"].max())
+            drawdown_wins += int(adaptive["drawdown"] > alternatives["drawdown"].max())
+            risk_aware_rows.append(
+                f"| {market} | {adaptive['average_growth_share']:.1%} | "
+                f"{adaptive['annual_return']:.1%} | {adaptive['sharpe']:.2f} | "
+                f"{adaptive['drawdown']:.1%} | {adaptive['expected_shortfall_5']:.1%} | "
+                f"{indexed.loc['fixed_25', 'sharpe']:.2f} | "
+                f"{indexed.loc['fixed_50', 'sharpe']:.2f} |"
+            )
+        risk_aware_pass = sharpe_wins >= 3 and drawdown_wins >= 3
+        risk_aware_verdict = "PASS FOR FURTHER TESTING" if risk_aware_pass else "REJECTED AS A REPLACEMENT"
+        risk_aware_section = f"""## Risk-Aware 25% / 50% Growth Sleeve: {risk_aware_verdict}
+
+The sleeve is 50% only when trend is positive and neither VIX is at least 25 nor credit underperforms Treasuries; under either stress flag it falls to 25%, and under negative trend it falls to zero. Thresholds were fixed before this test.
+
+- Highest Sharpe versus both fixed sleeves: **{sharpe_wins} / {risk_aware_results['market'].nunique()}** markets
+- Smallest drawdown versus both fixed sleeves: **{drawdown_wins} / {risk_aware_results['market'].nunique()}** markets
+
+| Market | Avg growth exposure | Annual return | Sharpe | Maximum drawdown | Worst-5% average | Fixed 25% Sharpe | Fixed 50% Sharpe |
+|---|---:|---:|---:|---:|---:|---:|---:|
+{chr(10).join(risk_aware_rows)}
+"""
     if external_results.empty:
         external_section = """## External-Market Validation: NOT RUN
 
@@ -1264,6 +1357,8 @@ Chronological out-of-sample research result. This model does not place orders.
 
 {growth_uncertainty_section}
 
+{risk_aware_section}
+
 {external_section}
 
 ## Latest standardized coefficients
@@ -1298,6 +1393,7 @@ def main() -> None:
     growth_frontier = growth_sleeve_frontier(data)
     external_growth_frontier = external_growth_sleeve_frontier(data)
     growth_uncertainty = growth_sleeve_uncertainty(data)
+    risk_aware_results = risk_aware_sleeve_validation(data)
     external_results = external_market_validation(data)
     coefficient_parts = []
     available_tickers = [ticker for ticker in TRAIN_TICKERS
@@ -1404,13 +1500,17 @@ def main() -> None:
     growth_uncertainty.assign(market_date=market_date).to_csv(
         OUTPUT_DIR / "latest_growth_sleeve_uncertainty.csv", index=False
     )
+    risk_aware_results.assign(market_date=market_date).to_csv(
+        OUTPUT_DIR / "latest_risk_aware_sleeve.csv", index=False
+    )
     external_results.assign(market_date=market_date).to_csv(
         OUTPUT_DIR / "latest_external_validation.csv", index=False
     )
     report = render_report(results, risk_results, context_results, portfolio_result,
                            regime_results, volatility_results, allocation_results, diversified_results,
                            dynamic_results, dynamic_uncertainty, dynamic_sensitivity, growth_frontier,
-                           external_growth_frontier, growth_uncertainty, external_results,
+                           external_growth_frontier, growth_uncertainty, risk_aware_results,
+                           external_results,
                            coefficients, market_date)
     (OUTPUT_DIR / "latest.md").write_text(report, encoding="utf-8")
     history = OUTPUT_DIR / "history"
