@@ -11,14 +11,6 @@ from journal import save_experiment
 from data_archive import archive_market_data, archive_experiment, archive_parameter_experiment, archive_daily_report
 from universe import ASSETS, asset_label, sector_etf_for
 
-st.markdown("""<style>
-[data-testid="stAppViewContainer"] {background: linear-gradient(145deg,#ffffff 0%,#f8fbff 55%,#f4f1ff 100%);}
-[data-testid="stSidebar"] {background: linear-gradient(180deg,#f2f6fc 0%,#eef1f8 100%);}
-h1 {letter-spacing:-0.035em;} h2,h3 {letter-spacing:-0.018em;}
-[data-testid="stMetric"] {background:rgba(255,255,255,.72);border:1px solid rgba(80,100,140,.12);padding:14px;border-radius:14px;}
-[data-testid="stTabs"] button {font-weight:600;}
-</style>""", unsafe_allow_html=True)
-
 language = st.sidebar.radio("Language / 语言", ["English", "中文"], horizontal=True,key="global_language")
 zh = language == "中文"
 T = {

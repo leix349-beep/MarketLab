@@ -8,12 +8,6 @@ import yfinance as yf
 from universe import ASSETS, asset_label
 from validation import walk_forward_validate
 
-st.markdown("""<style>
-[data-testid="stAppViewContainer"] {background:linear-gradient(145deg,#fff 0%,#f7fbff 55%,#f4f1ff 100%);}
-[data-testid="stSidebar"] {background:linear-gradient(180deg,#f2f6fc 0%,#eef1f8 100%);}
-h1 {letter-spacing:-.035em;} [data-testid="stMetric"] {background:rgba(255,255,255,.72);border:1px solid rgba(80,100,140,.12);padding:14px;border-radius:14px;}
-</style>""", unsafe_allow_html=True)
-
 language = st.sidebar.radio("Language / 语言", ["English", "中文"], horizontal=True, key="global_language")
 zh = language == "中文"
 st.title("Xiang’s MarketLab · 样本外验证" if zh else "Xiang’s MarketLab · Validation Lab")
