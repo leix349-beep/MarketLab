@@ -3,6 +3,7 @@ from datetime import date, timedelta
 import pandas as pd
 import plotly.express as px
 import streamlit as st
+from ui_theme import render_empty_state
 import yfinance as yf
 
 from universe import ASSETS, asset_label
@@ -41,8 +42,14 @@ if run:
             st.error(("无法完成验证：" if zh else "Validation could not be completed: ") + str(exc))
 
 if "validation_result" not in st.session_state:
-    st.info("选择窗口后运行验证。系统会重复执行：过去训练 → 锁定参数 → 未来测试。" if zh else
-            "Choose the windows and run validation. Each round follows: train on past → lock parameters → test on future.")
+    render_empty_state(
+        "样本外验证" if zh else "Out-of-sample validation",
+        "只用过去选择参数，再到未来检验" if zh else "Choose parameters on the past, then test on unseen data",
+        ("每一轮都严格按时间前进，降低前视偏差和参数只适合某段历史的风险。" if zh else
+         "Each fold moves forward through time to reduce look-ahead bias and the risk of parameters fitting only one historical period."),
+        (["设置训练与测试窗口", "运行滚动验证", "检查稳定性、回撤和样本外收益"] if zh else
+         ["Set training and testing windows", "Run walk-forward validation", "Review stability, drawdown, and out-of-sample return"]),
+    )
 else:
     result = st.session_state.validation_result
     summary, folds, curve = result["summary"], result["folds"].copy(), result["curve"]

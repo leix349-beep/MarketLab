@@ -1,4 +1,6 @@
 """Shared visual system for the MarketLab Streamlit interface."""
+from html import escape
+
 import plotly.io as pio
 import streamlit as st
 
@@ -113,6 +115,49 @@ def apply_theme() -> None:
         [data-testid="stTabs"] button { font-weight: 600; letter-spacing: -.01em; }
         [data-testid="stDataFrame"] { border: 1px solid var(--ml-line); border-radius: 14px; overflow: hidden; }
 
+        .ml-empty-state {
+          margin-top: 1.35rem;
+          padding: 1.35rem 1.45rem 1.2rem;
+          background: rgba(255, 255, 255, .78);
+          border: 1px solid var(--ml-line);
+          border-radius: 18px;
+          box-shadow: 0 12px 34px rgba(36, 50, 58, .045);
+        }
+        .ml-empty-kicker {
+          color: var(--ml-accent);
+          font-size: .76rem;
+          font-weight: 700;
+          letter-spacing: .08em;
+          text-transform: uppercase;
+        }
+        .ml-empty-state h3 { margin: .35rem 0 .3rem; font-size: 1.18rem; }
+        .ml-empty-state p { margin: 0; color: var(--ml-muted); max-width: 48rem; }
+        .ml-empty-steps {
+          display: grid;
+          grid-template-columns: repeat(3, minmax(0, 1fr));
+          gap: .7rem;
+          margin-top: 1rem;
+        }
+        .ml-empty-step {
+          padding: .78rem .85rem;
+          color: var(--ml-ink);
+          background: #f7f9fa;
+          border: 1px solid #e7ecef;
+          border-radius: 12px;
+          font-size: .88rem;
+        }
+        .ml-empty-step span {
+          display: block;
+          margin-bottom: .2rem;
+          color: var(--ml-accent);
+          font-size: .72rem;
+          font-weight: 700;
+        }
+        @media (max-width: 720px) {
+          .ml-empty-steps { grid-template-columns: 1fr; }
+          .ml-empty-state { padding: 1.05rem; }
+        }
+
         ::selection { background: rgba(71, 123, 158, .20); }
         ::-webkit-scrollbar { width: 10px; height: 10px; }
         ::-webkit-scrollbar-track { background: transparent; }
@@ -124,6 +169,25 @@ def apply_theme() -> None:
           *, *::before, *::after { transition-duration: .01ms !important; animation-duration: .01ms !important; }
         }
         </style>
+        """,
+        unsafe_allow_html=True,
+    )
+
+
+def render_empty_state(kicker: str, title: str, description: str, steps: list[str]) -> None:
+    """Render a compact, bilingual-ready first-run guide without fetching data."""
+    cards = "".join(
+        f'<div class="ml-empty-step"><span>{index:02d}</span>{escape(step)}</div>'
+        for index, step in enumerate(steps, start=1)
+    )
+    st.markdown(
+        f"""
+        <section class="ml-empty-state">
+          <div class="ml-empty-kicker">{escape(kicker)}</div>
+          <h3>{escape(title)}</h3>
+          <p>{escape(description)}</p>
+          <div class="ml-empty-steps">{cards}</div>
+        </section>
         """,
         unsafe_allow_html=True,
     )

@@ -10,6 +10,7 @@ from analytics import risk_metrics, monthly_returns
 from journal import save_experiment
 from data_archive import archive_market_data, archive_experiment, archive_parameter_experiment, archive_daily_report
 from universe import ASSETS, asset_label, sector_etf_for
+from ui_theme import render_empty_state
 
 language = st.sidebar.radio("Language / 语言", ["English", "中文"], horizontal=True,key="global_language")
 zh = language == "中文"
@@ -248,6 +249,15 @@ The strategy's return difference versus buy and hold is {m['总收益']-benchmar
     except Exception as e:
         st.error(f"暂时无法取得数据：{e}")
         st.info("请确认网络可用，然后重新运行。")
+else:
+    render_empty_state(
+        "研究起点" if zh else "Research starting point",
+        "先定义问题，再运行分析" if zh else "Define the question, then run the analysis",
+        ("选择标的和历史范围后，系统会比较规则策略、买入并持有以及标的自身风险。" if zh else
+         "Choose an asset and history range to compare the rule-based strategy, buy and hold, and the asset's underlying risk."),
+        (["在左侧选择股票或 ETF", "按需展开并调整策略参数", "点击“运行研究”生成结果"] if zh else
+         ["Select a stock or ETF", "Adjust strategy parameters if needed", "Run the analysis to generate results"]),
+    )
 
 
 

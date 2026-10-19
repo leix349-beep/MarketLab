@@ -3,6 +3,7 @@ import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
 import streamlit as st
+from ui_theme import render_empty_state
 import yfinance as yf
 from analytics import market_model
 from universe import ASSETS,asset_label
@@ -76,5 +77,12 @@ if "regression_request" in st.session_state:
         st.markdown("- **Beta:** sensitivity to market returns.\n- **Alpha:** average return not explained by market exposure.\n- **R²:** fraction of asset-return variation explained by the model.\n- **Residual ε:** unexplained company, sector, news and random variation.\n- **Bootstrap interval:** repeated resampling used to quantify uncertainty in Beta.")
     st.warning("回归描述历史关系，不证明因果关系，也不保证未来保持稳定。" if zh else "Regression describes historical association; it does not establish causality or guarantee stability.")
 else:
-    st.info("选择标的和基准，然后运行回归。" if zh else "Choose an asset and benchmark, then run the regression.")
+    render_empty_state(
+        "市场关系" if zh else "Market relationship",
+        "区分市场暴露与资产特有变化" if zh else "Separate market exposure from asset-specific movement",
+        ("回归会估计 Beta、年化 Alpha、解释度与不确定性，但不把相关关系解释为因果。" if zh else
+         "The regression estimates beta, annualized alpha, explanatory power, and uncertainty without treating association as causation."),
+        (["选择标的与市场基准", "运行同日收益回归", "检查滚动 Beta、残差和置信区间"] if zh else
+         ["Choose an asset and market benchmark", "Run the same-day return regression", "Inspect rolling beta, residuals, and confidence intervals"]),
+    )
 

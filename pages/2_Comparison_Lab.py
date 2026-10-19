@@ -5,6 +5,7 @@ import plotly.express as px
 import streamlit as st
 import yfinance as yf
 from universe import ASSETS, asset_label
+from ui_theme import render_empty_state
 
 language=st.sidebar.radio("Language / 语言",["English","中文"],horizontal=True,key="global_language")
 zh=language=="中文"
@@ -67,4 +68,11 @@ if "comparison_request" in st.session_state:
         pct=["累计收益","年化波动率"] if zh else ["Total Return","Annualized Volatility"]
         st.dataframe(display,width="stretch",hide_index=True,column_config={c:st.column_config.NumberColumn(format="%.2f%%") for c in pct})
 else:
-    st.info("选择2至4个资产并运行对比。" if zh else "Choose two to four assets and run the comparison.")
+    render_empty_state(
+        "横向比较" if zh else "Cross-asset view",
+        "用同一时间窗口公平比较资产" if zh else "Compare assets on one synchronized timeline",
+        ("所有资产会对齐到共同交易日，避免不同起止时间造成误导。" if zh else
+         "Every series is aligned to common trading days so different start dates do not distort the comparison."),
+        (["在左侧选择2至4个资产", "设置统一的历史范围", "查看收益、回撤、波动与相关性"] if zh else
+         ["Select two to four assets", "Set one shared history range", "Review return, drawdown, volatility, and correlation"]),
+    )
