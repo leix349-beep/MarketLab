@@ -45,9 +45,9 @@ if "regression_request" in st.session_state:
         ordered=detail.sort_values("market")
         scatter=go.Figure()
         scatter.add_scatter(x=detail["market"],y=detail["asset"],mode="markers",name="Daily observations" if not zh else "每日观测",
-                            marker=dict(size=6,color="#4f86c6",opacity=.42))
+                            marker=dict(size=6,color="#477B9E",opacity=.42))
         scatter.add_scatter(x=ordered["market"],y=ordered["predicted"],mode="lines",name="OLS fit" if not zh else "OLS拟合",
-                            line=dict(color="#ef5350",width=3))
+                            line=dict(color="#E7A977",width=3))
         scatter.update_layout(title="市场收益与标的收益" if zh else "Market vs Asset Returns",
                               xaxis_title=q["benchmark"]+(" 日收益" if zh else " Daily Return"),
                               yaxis_title=q["symbol"]+(" 日收益" if zh else " Daily Return"))
@@ -55,7 +55,7 @@ if "regression_request" in st.session_state:
         scatter.update_layout(height=430,margin=dict(l=10,r=10,t=45,b=10)); st.plotly_chart(scatter,width="stretch")
     with right:
         rb=px.line(rolling_beta,labels={"value":"Beta","index":"日期" if zh else "Date"},title="63日滚动 Beta" if zh else "63-Day Rolling Beta")
-        rb.add_hline(y=metrics["beta"],line_dash="dash",line_color="#ef4444")
+        rb.add_hline(y=metrics["beta"],line_dash="dash",line_color="#E7A977")
         rb.update_layout(height=430,showlegend=False,margin=dict(l=10,r=10,t=45,b=10)); st.plotly_chart(rb,width="stretch")
     left,right=st.columns(2)
     with left:

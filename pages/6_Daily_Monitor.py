@@ -145,7 +145,7 @@ with right:
                            title="最新强弱地图" if zh else "Latest Strength Map",
                            labels={"return_21d": "21日收益" if zh else "21-Day Return",
                                    "rsi14": "RSI14", "trend_state": "趋势" if zh else "Trend"})
-    map_chart.add_hline(y=70, line_dash="dot", line_color="#ef4444")
+    map_chart.add_hline(y=70, line_dash="dot", line_color="#D96767")
     map_chart.update_xaxes(tickformat=".0%")
     map_chart.update_traces(textposition="top center")
     map_chart.update_layout(height=380, margin=dict(l=10, r=10, t=50, b=10))
