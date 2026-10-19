@@ -5,7 +5,6 @@ import streamlit as st
 import yfinance as yf
 from universe import SECTOR_ETFS
 from data_archive import archive_sector_snapshot
-from ui_theme import render_empty_state
 
 language=st.sidebar.radio("Language / 语言",["English","中文"],horizontal=True,key="global_language")
 zh=language=="中文"
@@ -48,11 +47,4 @@ if "sector_page_result" in st.session_state:
     st.dataframe(shown,width="stretch",hide_index=True,
         column_config={col:st.column_config.NumberColumn(format="%.2f%%") for col in pct})
 else:
-    render_empty_state(
-        "板块轮动" if zh else "Sector rotation",
-        "比较市场内部的强弱变化" if zh else "See where market leadership is shifting",
-        ("一次加载11个标准行业 ETF，并在同一周期内比较收益与波动率。" if zh else
-         "Load 11 standard sector ETFs and compare return and volatility over one consistent period."),
-        (["选择1至12个月的排名周期", "加载板块研究", "比较领先、落后与板块收益差"] if zh else
-         ["Choose a 1–12 month ranking period", "Load sector research", "Compare leaders, laggards, and dispersion"]),
-    )
+    st.info("点击按钮后生成11个板块的独立排名。" if zh else "Load the 11-sector market ranking to begin.")

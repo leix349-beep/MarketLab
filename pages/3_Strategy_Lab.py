@@ -6,7 +6,6 @@ import yfinance as yf
 from universe import ASSETS,asset_label
 from strategy_library import compare_strategies
 from data_archive import archive_parameter_experiment
-from ui_theme import render_empty_state
 
 language=st.sidebar.radio("Language / 语言",["English","中文"],horizontal=True,key="global_language")
 zh=language=="中文"
@@ -71,12 +70,5 @@ if "strategy_request" in st.session_state:
     st.markdown(definitions)
     st.warning("所有策略均为历史模拟，尚未完成样本外滚动验证。" if zh else "All strategies are historical simulations and have not yet passed walk-forward out-of-sample validation.")
 else:
-    render_empty_state(
-        "规则实验" if zh else "Rule-based experiment",
-        "把不同策略放在相同条件下比较" if zh else "Compare strategies under identical assumptions",
-        ("所有候选策略使用相同数据、费用和成交时点，结果不会自动视为可交易结论。" if zh else
-         "Every candidate uses the same data, costs, and execution timing; results are not treated as trading-ready conclusions."),
-        (["选择标的与历史范围", "按需调整模型参数", "比较收益、回撤、夏普与平均仓位"] if zh else
-         ["Choose an asset and history range", "Adjust model parameters if needed", "Compare return, drawdown, Sharpe, and exposure"]),
-    )
+    st.info("选择标的与参数，然后比较策略。" if zh else "Choose an asset and parameters, then compare strategies.")
 
