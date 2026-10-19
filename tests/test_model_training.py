@@ -35,6 +35,15 @@ class ModelTrainingTests(unittest.TestCase):
         self.assertNotEqual(first["data_sha256"], dataset_provenance(revised)["data_sha256"])
         self.assertEqual(first["rows"], 3)
         self.assertEqual(first["tickers"], 1)
+        self.assertEqual(first["latest_price_date"], first["end_date"])
+        self.assertEqual(first["latest_labeled_date"], first["end_date"])
+        self.assertEqual(first["pending_label_sessions"], 0)
+        frame.attrs["latest_price_date"] = "2026-01-08"
+        frame.attrs["pending_label_sessions"] = 3
+        fresh = dataset_provenance(frame)
+        self.assertEqual(fresh["latest_price_date"], "2026-01-08")
+        self.assertEqual(fresh["latest_labeled_date"], "2026-01-05")
+        self.assertEqual(fresh["pending_label_sessions"], 3)
 
     def test_provenance_history_deduplicates_reruns_and_numbers_revisions(self):
         current = {

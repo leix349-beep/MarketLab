@@ -34,11 +34,17 @@ def dataset_provenance(data: pd.DataFrame) -> dict[str, object]:
     digest = hashlib.sha256(hashed.to_numpy().tobytes()).hexdigest()
     dates = pd.to_datetime(data.index.get_level_values("date"))
     tickers = sorted(set(data.index.get_level_values("ticker_id").astype(str)))
+    labeled_end_date = dates.max().date().isoformat()
     return {
         "provider": "Yahoo Finance via yfinance",
         "price_adjustment": "auto_adjust=True",
         "start_date": dates.min().date().isoformat(),
-        "end_date": dates.max().date().isoformat(),
+        # end_date is retained for backwards compatibility and refers to the
+        # latest row whose five-session outcome is fully known.
+        "end_date": labeled_end_date,
+        "latest_price_date": data.attrs.get("latest_price_date", labeled_end_date),
+        "latest_labeled_date": labeled_end_date,
+        "pending_label_sessions": int(data.attrs.get("pending_label_sessions", 0)),
         "rows": int(len(data)),
         "tickers": int(len(tickers)),
         "data_sha256": digest,
@@ -941,7 +947,13 @@ def download_dataset() -> pd.DataFrame:
         parts.append(features)
     if not parts:
         raise RuntimeError("No training data was downloaded.")
-    return pd.concat(parts).sort_index()
+    panel = pd.concat(parts).sort_index()
+    latest_labeled = pd.Timestamp(panel.index.get_level_values("date").max())
+    latest_price = max(pd.Timestamp(frame.index.max()) for frame in frames.values())
+    spy_dates = pd.DatetimeIndex(frames["SPY"].index) if "SPY" in frames else pd.DatetimeIndex([])
+    panel.attrs["latest_price_date"] = latest_price.date().isoformat()
+    panel.attrs["pending_label_sessions"] = int((spy_dates > latest_labeled).sum())
+    return panel
 
 
 def render_report(results: pd.DataFrame, risk_results: pd.DataFrame,
@@ -959,7 +971,9 @@ def render_report(results: pd.DataFrame, risk_results: pd.DataFrame,
                   growth_uncertainty: pd.DataFrame,
                   risk_aware_results: pd.DataFrame,
                   external_results: pd.DataFrame,
-                  coefficients: pd.Series, market_date: str) -> str:
+                  coefficients: pd.Series, market_date: str,
+                  latest_price_date: str | None = None,
+                  pending_label_sessions: int = 0) -> str:
     rows = "\n".join(f"| {name} | {value:+.4f} |" for name, value in coefficients.items())
     result_rows = "\n".join(
         f"| {row.ticker} | {row.observations:,} | {row.accuracy:.1%} | {row.accuracy_edge:+.1%} | "
@@ -1385,9 +1399,18 @@ The U.S.-designed rule is frozen and applied without retuning to developed ex-U.
 |---|---:|---:|---:|---:|---:|---:|---:|---:|---:|
 {external_rows}
 """
-    return f"""# MarketLab Model Training — {market_date}
+    latest_price_date = latest_price_date or market_date
+    return f"""# MarketLab Model Training — {latest_price_date}
 
 Chronological out-of-sample research result. This model does not place orders.
+
+## Data Freshness
+
+- Latest available market price: **{latest_price_date}**
+- Latest sample with a fully observed five-session outcome: **{market_date}**
+- Recent trading sessions awaiting a mature label: **{pending_label_sessions}**
+
+The gap is intentional: the model predicts the following five trading sessions and does not score observations before their outcomes exist.
 
 ## Verdict: {verdict}
 
@@ -1605,7 +1628,9 @@ def main() -> None:
                            dynamic_results, dynamic_uncertainty, dynamic_sensitivity, growth_frontier,
                            external_growth_frontier, growth_uncertainty, risk_aware_results,
                            external_results,
-                           coefficients, market_date)
+                           coefficients, market_date,
+                           latest_price_date=str(provenance["latest_price_date"]),
+                           pending_label_sessions=int(provenance["pending_label_sessions"]))
     (OUTPUT_DIR / "latest.md").write_text(report, encoding="utf-8")
     history = OUTPUT_DIR / "history"
     history.mkdir(exist_ok=True)

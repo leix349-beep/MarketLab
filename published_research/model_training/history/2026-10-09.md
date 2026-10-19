@@ -1,6 +1,14 @@
-# MarketLab Model Training — 2026-10-09
+# MarketLab Model Training — 2026-10-16
 
 Chronological out-of-sample research result. This model does not place orders.
+
+## Data Freshness
+
+- Latest available market price: **2026-10-16**
+- Latest sample with a fully observed five-session outcome: **2026-10-09**
+- Recent trading sessions awaiting a mature label: **5**
+
+The gap is intentional: the model predicts the following five trading sessions and does not score observations before their outcomes exist.
 
 ## Verdict: REJECTED AS A TRADING MODEL
 
