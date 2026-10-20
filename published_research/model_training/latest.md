@@ -1,10 +1,10 @@
-# MarketLab Model Training — 2026-10-19
+# MarketLab Model Training — 2026-10-20
 
 Chronological out-of-sample research result. This model does not place orders.
 
 ## Data Freshness
 
-- Latest available market price: **2026-10-19**
+- Latest available market price: **2026-10-20**
 - Latest sample with a fully observed five-session outcome: **2026-10-12**
 - Recent trading sessions awaiting a mature label: **5**
 
@@ -60,7 +60,7 @@ Uses credit versus Treasuries, the dollar, gold, VIX, SPY trend and market bread
 
 - Assets with ROC AUC above 0.52: **2 / 6**
 - Assets with higher Sharpe than buy and hold: **0 / 6**
-- Assets with smaller maximum drawdown: **5 / 6**
+- Assets with smaller maximum drawdown: **4 / 6**
 
 | Asset | ROC AUC | Risk recall | Exit rate | Avg threshold | No-filter fallback | Ann. return | Model Sharpe | B&H Sharpe | Model DD | B&H DD |
 |---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
