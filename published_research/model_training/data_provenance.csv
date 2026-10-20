@@ -1,2 +1,2 @@
 provider,price_adjustment,start_date,end_date,latest_price_date,latest_labeled_date,pending_label_sessions,rows,tickers,data_sha256
-Yahoo Finance via yfinance,auto_adjust=True,2017-01-17,2026-10-09,2026-10-16,2026-10-09,5,34258,14,e8ccfed7889450a30944f6c1882393257c308db5a752f089913cf0b5027b9b34
+Yahoo Finance via yfinance,auto_adjust=True,2017-01-20,2026-10-12,2026-10-19,2026-10-12,5,34230,14,fb2b8f85b1b254eb9e64bbff3bf285e8678bd32118739cb48b43fb25c410e5e6
