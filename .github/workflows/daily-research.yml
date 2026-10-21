@@ -41,7 +41,9 @@ jobs:
         run: python daily_monitor.py
 
       - name: Train and test research model
-        run: python model_training.py
+        # The second post-close attempt still checks for fresher prices, but it
+        # does not repeat the heavy model suite for an unchanged mature sample.
+        run: python model_training.py --skip-if-current
 
       - name: Commit new observation
         if: github.event_name != 'push'

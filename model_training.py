@@ -5,6 +5,7 @@ Evaluation is strictly chronological: every prediction is produced by a model
 that has only seen earlier observations. No orders are placed.
 """
 from __future__ import annotations
+import argparse
 from dataclasses import dataclass
 import hashlib
 from pathlib import Path
@@ -23,6 +24,22 @@ CONTEXT_FEATURES = ("market_ret_21", "market_ma_gap", "credit_vs_treasury_21",
                     "breadth_above_ma60")
 CONTEXT_RISK_FEATURES = RISK_FEATURES + CONTEXT_FEATURES
 OUTPUT_DIR = Path("published_research/model_training")
+
+
+def training_is_current(provenance: dict[str, object],
+                        path: Path = OUTPUT_DIR / "data_provenance.csv") -> bool:
+    """Return True when this mature sample date has already been evaluated."""
+    if not path.exists():
+        return False
+    try:
+        previous = pd.read_csv(path)
+    except (OSError, pd.errors.EmptyDataError, pd.errors.ParserError):
+        return False
+    if previous.empty:
+        return False
+    previous_date = previous.iloc[-1].get("latest_labeled_date",
+                                          previous.iloc[-1].get("end_date"))
+    return str(previous_date) == str(provenance["latest_labeled_date"])
 
 
 def dataset_provenance(data: pd.DataFrame) -> dict[str, object]:
@@ -1475,8 +1492,16 @@ Each asset is trained and tested independently with a regularized logistic regre
 """
 
 
-def main() -> None:
+def main(skip_if_current: bool = False) -> None:
     data = download_dataset()
+    provenance = dataset_provenance(data)
+    if skip_if_current and training_is_current(provenance):
+        print(
+            "Skipping model training: mature sample "
+            f"{provenance['latest_labeled_date']} has already been evaluated "
+            f"(latest market price {provenance['latest_price_date']})."
+        )
+        return
     result_rows = []
     prediction_parts = []
     risk_result_rows = []
@@ -1543,7 +1568,6 @@ def main() -> None:
     context_results = pd.DataFrame(context_result_rows)
     market_date = pd.Timestamp(data.index.get_level_values("date").max()).date().isoformat()
     OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
-    provenance = dataset_provenance(data)
     pd.DataFrame([provenance]).to_csv(
         OUTPUT_DIR / "data_provenance.csv", index=False
     )
@@ -1639,4 +1663,10 @@ def main() -> None:
 
 
 if __name__ == "__main__":
-    main()
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument(
+        "--skip-if-current",
+        action="store_true",
+        help="Skip heavy evaluation when the latest mature five-session sample was already tested.",
+    )
+    main(skip_if_current=parser.parse_args().skip_if_current)

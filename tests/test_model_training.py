@@ -1,4 +1,6 @@
 import unittest
+from pathlib import Path
+from tempfile import TemporaryDirectory
 import numpy as np
 import pandas as pd
 from unittest.mock import patch
@@ -14,6 +16,7 @@ from model_training import (CONTEXT_FEATURES, FEATURES, RISK_FEATURES, build_con
                             growth_sleeve_uncertainty,
                             experiment_registry,
                             merge_provenance_history,
+                            training_is_current,
                             risk_aware_sleeve_validation,
                             block_bootstrap_sharpe_difference, dynamic_allocation_sensitivity,
                             external_market_validation)
@@ -62,6 +65,21 @@ class ModelTrainingTests(unittest.TestCase):
         next_date = current | {"end_date": "2026-01-05", "data_sha256": "ccc"}
         history = merge_provenance_history(history, next_date)
         self.assertEqual(int(history.iloc[-1]["revision"]), 1)
+
+    def test_training_skips_only_an_already_evaluated_mature_date(self):
+        current = {"latest_labeled_date": "2026-10-13"}
+        with TemporaryDirectory() as directory:
+            path = Path(directory) / "data_provenance.csv"
+            self.assertFalse(training_is_current(current, path))
+            pd.DataFrame([{
+                "end_date": "2026-10-13",
+                "latest_labeled_date": "2026-10-13",
+                "latest_price_date": "2026-10-20",
+            }]).to_csv(path, index=False)
+            self.assertTrue(training_is_current(current, path))
+            self.assertFalse(training_is_current(
+                {"latest_labeled_date": "2026-10-14"}, path
+            ))
 
     def test_experiment_registry_is_unique_and_keeps_rejections(self):
         registry = experiment_registry("2026-10-09")
