@@ -34,6 +34,82 @@ if lag:
     st.warning(("行情源尚未提供最新完整日线；页面保留最后一个已确认交易日，不会用重复数据冒充新记录。" if zh else
                 "The data source has not supplied the latest complete daily bar. The page keeps the last confirmed market day rather than presenting duplicate data as new."))
 
+model_dir = Path("published_research/model_training")
+registry_path = model_dir / "experiment_registry.csv"
+provenance_path = model_dir / "data_provenance.csv"
+frontier_path = model_dir / "latest_growth_sleeve_frontier.csv"
+multi_asset_path = model_dir / "latest_multi_asset.csv"
+uncertainty_path = model_dir / "latest_growth_sleeve_uncertainty.csv"
+
+registry = pd.read_csv(registry_path) if registry_path.exists() else pd.DataFrame()
+provenance = pd.read_csv(provenance_path).iloc[0] if provenance_path.exists() else None
+
+if provenance is not None and frontier_path.exists():
+    frontier = pd.read_csv(frontier_path)
+    candidate_rows = frontier.loc[frontier["growth_sleeve"].round(2) == 0.25]
+    if not candidate_rows.empty:
+        candidate = candidate_rows.iloc[-1]
+        spy = None
+        if multi_asset_path.exists():
+            multi_asset = pd.read_csv(multi_asset_path)
+            spy_rows = multi_asset.loc[
+                (multi_asset["scope"] == "Full history") &
+                (multi_asset["strategy"].str.lower() == "spy")
+            ]
+            if not spy_rows.empty:
+                spy = spy_rows.iloc[-1]
+
+        st.subheader("模型状态" if zh else "Model Status")
+        st.caption(("把训练结论、数据成熟度和当前纸面候选放在同一处；状态不会因单次好结果自动升级。" if zh else
+                    "Training verdicts, data maturity, and the current paper candidate in one place; a single favorable result never upgrades the status."))
+        m1, m2, m3, m4 = st.columns(4)
+        latest_price_date = str(provenance.get("latest_price_date", provenance["end_date"]))
+        latest_labeled_date = str(provenance.get("latest_labeled_date", provenance["end_date"]))
+        pending_sessions = int(provenance.get("pending_label_sessions", 0))
+        tracking_count = (int((registry["decision"] == "PAPER_TRACKING").sum())
+                          if not registry.empty else 0)
+        m1.metric("最新行情" if zh else "Latest Price", latest_price_date)
+        m2.metric("成熟训练样本" if zh else "Mature Training Sample", latest_labeled_date)
+        m3.metric("等待成熟" if zh else "Awaiting Labels",
+                  f"{pending_sessions} 个交易日" if zh else f"{pending_sessions} sessions")
+        m4.metric("当前状态" if zh else "Current Status",
+                  "观察" if zh else "PAPER TRACKING",
+                  f"{tracking_count} 个候选" if zh else f"{tracking_count} candidate(s)",
+                  delta_color="off")
+
+        c1, c2, c3, c4 = st.columns(4)
+        return_delta = ((float(candidate["annual_return"]) - float(spy["annual_return"]))
+                        if spy is not None else None)
+        sharpe_delta = ((float(candidate["sharpe"]) - float(spy["sharpe"]))
+                        if spy is not None else None)
+        drawdown_delta = ((float(candidate["drawdown"]) - float(spy["drawdown"]))
+                          if spy is not None else None)
+        c1.metric("25%仓位年化收益" if zh else "25% Sleeve Annual Return",
+                  f"{candidate['annual_return']:.1%}",
+                  (f"{return_delta:+.1%} 对比 SPY" if zh else f"{return_delta:+.1%} vs SPY")
+                  if return_delta is not None else None)
+        c2.metric("夏普比率" if zh else "Sharpe Ratio", f"{candidate['sharpe']:.2f}",
+                  (f"{sharpe_delta:+.2f} 对比 SPY" if zh else f"{sharpe_delta:+.2f} vs SPY")
+                  if sharpe_delta is not None else None)
+        c3.metric("最大回撤" if zh else "Maximum Drawdown", f"{candidate['drawdown']:.1%}",
+                  (f"{drawdown_delta:+.1%} 对比 SPY" if zh else f"{drawdown_delta:+.1%} vs SPY")
+                  if drawdown_delta is not None else None)
+        c4.metric("正收益年份" if zh else "Positive Years",
+                  f"{int(candidate['positive_years'])} / {int(candidate['years_tested'])}")
+
+        uncertainty_warning = True
+        if uncertainty_path.exists():
+            uncertainty = pd.read_csv(uncertainty_path)
+            spy_comparisons = uncertainty.loc[
+                (uncertainty["market"] == "SPY") &
+                (uncertainty["candidate_sleeve"].round(2) == 0.25)
+            ]
+            uncertainty_warning = bool(spy_comparisons.empty or
+                                       (spy_comparisons["lower_95"] <= 0).any())
+        if uncertainty_warning:
+            st.warning(("25%成长仓位目前只是纸面候选：它降低了历史回撤，但美国样本的统计区间仍跨过零；方向预测模型也未超过简单基准。不能据此生成实盘指令。" if zh else
+                        "The 25% growth sleeve remains a paper candidate: it reduced historical drawdown, but the U.S. confidence interval still crosses zero and the direction model did not beat simple baselines. It must not generate live-trading instructions."))
+
 paper_dir = Path("published_research/paper_tracking")
 signal_paths = sorted((paper_dir / "signals").glob("????-??-??.csv"))
 if signal_paths:
@@ -92,11 +168,7 @@ if signal_paths:
                              "跑赢SPY" if zh else "Beat SPY", format="%.1f%%"),
                      })
 
-registry_path = Path("published_research/model_training/experiment_registry.csv")
 if registry_path.exists():
-    registry = pd.read_csv(registry_path)
-    provenance_path = Path("published_research/model_training/data_provenance.csv")
-    provenance = pd.read_csv(provenance_path).iloc[0] if provenance_path.exists() else None
     provenance_history_path = Path("published_research/model_training/data_provenance_history.csv")
     provenance_history = (pd.read_csv(provenance_history_path)
                           if provenance_history_path.exists() else pd.DataFrame())
