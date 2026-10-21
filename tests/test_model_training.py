@@ -1,4 +1,5 @@
 import unittest
+import hashlib
 from pathlib import Path
 from tempfile import TemporaryDirectory
 import numpy as np
@@ -23,6 +24,20 @@ from model_training import (CONTEXT_FEATURES, FEATURES, RISK_FEATURES, build_con
 
 
 class ModelTrainingTests(unittest.TestCase):
+    def test_frozen_baseline_snapshot_has_not_changed(self):
+        path = Path("published_research/model_training/frozen_baseline_2026-10-20.csv")
+        digest = hashlib.sha256(path.read_bytes()).hexdigest()
+        self.assertEqual(
+            digest,
+            "7d8ec4ff168ff1e354e824f518fe7017902987b254002b31af98c5ce092e6d50",
+            "The sealed baseline changed. Create a new dated baseline instead of editing it.",
+        )
+
+    def test_daily_workflow_does_not_retrain_archived_models(self):
+        workflow = Path(".github/workflows/daily-research.yml").read_text(encoding="utf-8")
+        self.assertNotIn("python model_training.py", workflow)
+        self.assertIn("python daily_monitor.py", workflow)
+
     def test_dataset_fingerprint_is_stable_and_detects_revision(self):
         dates = pd.bdate_range("2026-01-01", periods=3)
         frame = pd.DataFrame({
@@ -87,6 +102,8 @@ class ModelTrainingTests(unittest.TestCase):
         self.assertEqual(set(registry["decision"]), {"REJECTED", "PAPER_TRACKING"})
         self.assertGreaterEqual((registry["decision"] == "REJECTED").sum(), 1)
         self.assertTrue((registry["last_evaluated_market_date"] == "2026-10-09").all())
+        direction = registry.loc[registry["family"].str.startswith("Direction classifier")].iloc[0]
+        self.assertIn("ARCHIVED", direction["family"])
         risk_aware = registry.loc[registry["family"] == "Risk-aware sleeve"].iloc[0]
         self.assertEqual(risk_aware["decision"], "REJECTED")
 

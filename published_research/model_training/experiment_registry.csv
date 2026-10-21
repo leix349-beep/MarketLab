@@ -1,5 +1,5 @@
 experiment_id,family,hypothesis,frozen_design,validation_scope,decision,reason,last_evaluated_market_date
-ML-001,Direction classifier,Five-day direction probabilities can improve risk-adjusted returns.,Chronological refits with a five-session embargo and trading costs.,Six US assets,REJECTED,No durable advantage over the benchmark.,2026-10-13
+ML-001,Direction classifier [ARCHIVED],Five-day direction probabilities can improve risk-adjusted returns.,Chronological refits with a five-session embargo and trading costs.,Six US assets,REJECTED,No durable advantage over the benchmark; removed from scheduled retraining.,2026-10-13
 ML-002,Downside-risk filter,Predicted five-day downside risk can improve the base strategy.,Nested threshold selection using past observations only.,Six US assets,REJECTED,Risk reduction did not produce a robust return trade-off.,2026-10-13
 ML-003,Cross-asset risk filter,"Rates, credit, dollar, gold and volatility add useful risk context.",Frozen contextual features with chronological evaluation.,Six US assets,REJECTED,Context did not pass the predeclared gates.,2026-10-13
 ML-004,Portfolio regime overlay,Aggregated downside probabilities identify portfolio risk regimes.,Out-of-sample portfolio overlay with costs.,US training universe,REJECTED,The overlay was not consistently superior.,2026-10-13

@@ -40,17 +40,12 @@ jobs:
       - name: Build daily snapshot
         run: python daily_monitor.py
 
-      - name: Train and test research model
-        # The second post-close attempt still checks for fresher prices, but it
-        # does not repeat the heavy model suite for an unchanged mature sample.
-        run: python model_training.py --skip-if-current
-
       - name: Commit new observation
         if: github.event_name != 'push'
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add published_research/daily published_research/model_training published_research/paper_tracking
+          git add published_research/daily published_research/paper_tracking
           if git diff --cached --quiet; then
             echo "No new market observation to commit."
           else

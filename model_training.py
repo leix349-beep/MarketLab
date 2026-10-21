@@ -1,8 +1,8 @@
-"""Train and evaluate a small, explainable market model.
+"""Archived research suite for rejected and paper-tracked market models.
 
-The model predicts whether the next five trading days have a positive return.
-Evaluation is strictly chronological: every prediction is produced by a model
-that has only seen earlier observations. No orders are placed.
+The five-session direction classifier is a rejected baseline.  This module is
+kept for reproducibility and deliberate research runs, but is no longer called
+by the daily data workflow.  No orders are placed.
 """
 from __future__ import annotations
 import argparse
@@ -93,7 +93,7 @@ def experiment_registry(market_date: str) -> pd.DataFrame:
     retested after their result is forgotten.
     """
     rows = [
-        ("ML-001", "Direction classifier", "Five-day direction probabilities can improve risk-adjusted returns.",
+        ("ML-001", "Direction classifier [ARCHIVED]", "Five-day direction probabilities can improve risk-adjusted returns.",
          "Chronological refits with a five-session embargo and trading costs.",
          "Six US assets", "REJECTED", "No durable advantage over the benchmark."),
         ("ML-002", "Downside-risk filter", "Predicted five-day downside risk can improve the base strategy.",
