@@ -1,0 +1,39 @@
+{
+  "version_id": "prices-a75b446717b99a55",
+  "provider": "Yahoo Finance via yfinance",
+  "price_adjustment": "auto_adjust=True",
+  "period_request": "10y",
+  "retrieved_at_utc": "2026-10-23T06:38:08+00:00",
+  "data_file": "prices.csv",
+  "sha256": "a75b446717b99a557c439868dfb21968180f9ac9079541a105a536c337201760",
+  "rows": 37697,
+  "tickers": [
+    "EEM",
+    "EFA",
+    "EWJ",
+    "GLD",
+    "HYG",
+    "IWM",
+    "QQQ",
+    "SPY",
+    "TLT",
+    "UUP",
+    "VGK",
+    "XLE",
+    "XLF",
+    "XLK",
+    "^VIX"
+  ],
+  "ticker_count": 15,
+  "first_date": "2016-10-24",
+  "last_date": "2026-10-22",
+  "columns": [
+    "date",
+    "ticker",
+    "Open",
+    "High",
+    "Low",
+    "Close",
+    "Volume"
+  ]
+}

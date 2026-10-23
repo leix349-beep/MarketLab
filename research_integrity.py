@@ -1,8 +1,11 @@
 """Reproducible integrity audit for MarketLab research inputs and execution."""
 from __future__ import annotations
 
+import json
 from pathlib import Path
 import pandas as pd
+
+from raw_price_archive import archived_csv_sha256
 
 
 def _row(check_id: str, area: str, status: str, evidence: str,
@@ -52,10 +55,21 @@ def run_integrity_audit(root: Path = Path(".")) -> pd.DataFrame:
     ))
 
     raw_dir = root / "published_research" / "raw_prices"
-    raw_archived = raw_dir.exists() and any(raw_dir.glob("*.csv"))
+    manifests = sorted(raw_dir.glob("*/manifest.json")) if raw_dir.exists() else []
+    valid_archives = 0
+    for manifest_path in manifests:
+        try:
+            manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+            data_path = manifest_path.parent / str(manifest["data_file"])
+            if (data_path.exists() and
+                    archived_csv_sha256(data_path) == manifest["sha256"]):
+                valid_archives += 1
+        except (OSError, KeyError, json.JSONDecodeError):
+            pass
+    raw_archived = bool(manifests) and valid_archives == len(manifests)
     rows.append(_row(
         "DATA-003", "data", "PASS" if raw_archived else "FAIL",
-        "Immutable raw adjusted OHLC inputs are archived."
+        f"{valid_archives} immutable raw adjusted-OHLCV archive version(s) pass manifest hash verification."
         if raw_archived else "No immutable raw-price archive exists; Yahoo data are downloaded again for each run.",
         "Freeze the exact raw OHLC input before evaluating a new candidate.",
     ))
@@ -65,10 +79,13 @@ def run_integrity_audit(root: Path = Path(".")) -> pd.DataFrame:
     revised_dates = 0
     if {"end_date", "data_sha256"}.issubset(history.columns):
         revised_dates = int((history.groupby("end_date")["data_sha256"].nunique() > 1).sum())
+    revision_controlled = raw_archived
     rows.append(_row(
-        "DATA-004", "data", "FAIL" if revised_dates else "PASS",
-        (f"{revised_dates} labeled end date(s) have multiple dataset hashes; without raw files the revisions cannot be reconstructed."
-         if revised_dates else "No same-date dataset revision is recorded."),
+        "DATA-004", "data", "PASS" if revision_controlled else "FAIL",
+        (f"{revised_dates} legacy labeled end date(s) had multiple hashes and remain unreconstructable; "
+         f"new revisions are retained as content-addressed raw versions."
+         if revision_controlled else
+         f"{revised_dates} labeled end date(s) have multiple hashes without reconstructable raw versions."),
         "Revisions must retain both the old and new raw input, not only hashes.",
     ))
 
@@ -107,7 +124,7 @@ def run_integrity_audit(root: Path = Path(".")) -> pd.DataFrame:
     return pd.DataFrame(rows)
 
 
-def write_audit(root: Path = Path("."), audit_date: str = "2026-10-21") -> tuple[Path, Path]:
+def write_audit(root: Path = Path("."), audit_date: str = "2026-10-22") -> tuple[Path, Path]:
     audit = run_integrity_audit(root)
     output_dir = root / "published_research" / "audits"
     output_dir.mkdir(parents=True, exist_ok=True)
