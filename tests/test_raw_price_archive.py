@@ -22,6 +22,10 @@ def sample_prices() -> pd.DataFrame:
 
 
 class RawPriceArchiveTests(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        Path(".test_tmp").mkdir(exist_ok=True)
+
     def test_archive_is_content_addressed_and_idempotent(self):
         with TemporaryDirectory(dir=".test_tmp") as directory:
             root = Path(directory)
