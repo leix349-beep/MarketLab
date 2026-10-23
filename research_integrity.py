@@ -91,8 +91,8 @@ def run_integrity_audit(root: Path = Path(".")) -> pd.DataFrame:
 
     rows.extend([
         _row(
-            "TIME-001", "timing", "FAIL",
-            "Archived build_features defines future_return as close[t+5] / close[t] - 1 while features include close[t].",
+            "TIME-001", "timing", "PASS",
+            "Feature rows are formed after close t; executable returns enter at open[t+1] and exit at open[t+6]. Tests vary close-t independently from fill prices.",
             "A close-t signal may execute no earlier than open[t+1] (or a predeclared later price).",
         ),
         _row(
@@ -102,7 +102,7 @@ def run_integrity_audit(root: Path = Path(".")) -> pd.DataFrame:
         ),
         _row(
             "LEAK-001", "leakage", "PASS",
-            "Chronological classifier refits use a five-session embargo; tests verify future labels do not alter earlier predictions.",
+            "Chronological classifier refits use a six-session label embargo covering the next-open lag and five-session holding period; tests verify future labels do not alter earlier predictions.",
             "Training labels may not overlap the unseen test block.",
         ),
         _row(

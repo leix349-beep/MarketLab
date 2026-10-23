@@ -11,7 +11,7 @@ class ResearchIntegrityTests(unittest.TestCase):
         self.assertEqual(audit.loc["DATA-002", "status"], "PASS")
         self.assertEqual(audit.loc["DATA-003", "status"], "PASS")
         self.assertEqual(audit.loc["DATA-004", "status"], "PASS")
-        self.assertEqual(audit.loc["TIME-001", "status"], "FAIL")
+        self.assertEqual(audit.loc["TIME-001", "status"], "PASS")
         self.assertEqual(audit.loc["TIME-002", "status"], "PASS")
         self.assertEqual(audit.loc["LEAK-001", "status"], "PASS")
         self.assertEqual(audit.loc["LEAK-002", "status"], "PASS")

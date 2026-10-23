@@ -109,13 +109,28 @@ class ModelTrainingTests(unittest.TestCase):
 
     def test_future_rows_are_removed(self):
         index = pd.bdate_range("2020-01-01", periods=300)
-        frame = pd.DataFrame({"Close": np.linspace(100, 150, len(index))}, index=index)
+        frame = pd.DataFrame({
+            "Open": np.linspace(99, 149, len(index)),
+            "Close": np.linspace(100, 150, len(index)),
+        }, index=index)
         features = build_features(frame, horizon=5)
-        self.assertLessEqual(features.index.max(), index[-6])
+        self.assertLessEqual(features.index.max(), index[-7])
         self.assertTrue(features[list(FEATURES) + ["future_return", "label"]].notna().all().all())
         risk_ready = features.dropna(subset=list(RISK_FEATURES) + ["risk_label"])
         self.assertFalse(risk_ready.empty)
         self.assertTrue(risk_ready[list(RISK_FEATURES) + ["risk_label"]].notna().all().all())
+
+    def test_forward_return_enters_only_at_next_open(self):
+        index = pd.bdate_range("2020-01-01", periods=300)
+        opens = pd.Series(np.linspace(100, 200, len(index)), index=index)
+        closes = pd.Series(np.linspace(1000, 10, len(index)), index=index)
+        features = build_features(pd.DataFrame({"Open": opens, "Close": closes}), horizon=5)
+        signal_date = features.index[0]
+        location = index.get_loc(signal_date)
+        expected = opens.iloc[location + 6] / opens.iloc[location + 1] - 1
+        self.assertAlmostEqual(features.loc[signal_date, "future_return"], expected)
+        self.assertEqual(features.loc[signal_date, "entry_open"], opens.iloc[location + 1])
+        self.assertNotEqual(features.loc[signal_date, "entry_open"], closes.iloc[location])
 
     def test_chronological_result_starts_after_training_window(self):
         rng = np.random.default_rng(5)

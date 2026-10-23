@@ -24,6 +24,9 @@ CONTEXT_FEATURES = ("market_ret_21", "market_ma_gap", "credit_vs_treasury_21",
                     "breadth_above_ma60")
 CONTEXT_RISK_FEATURES = RISK_FEATURES + CONTEXT_FEATURES
 OUTPUT_DIR = Path("published_research/model_training")
+HOLDING_SESSIONS = 5
+EXECUTION_LAG_SESSIONS = 1
+LABEL_SPAN_SESSIONS = HOLDING_SESSIONS + EXECUTION_LAG_SESSIONS
 
 
 def training_is_current(provenance: dict[str, object],
@@ -94,7 +97,7 @@ def experiment_registry(market_date: str) -> pd.DataFrame:
     """
     rows = [
         ("ML-001", "Direction classifier [ARCHIVED]", "Five-day direction probabilities can improve risk-adjusted returns.",
-         "Chronological refits with a five-session embargo and trading costs.",
+         "Chronological refits with a six-session label embargo and trading costs.",
          "Six US assets", "REJECTED", "No durable advantage over the benchmark."),
         ("ML-002", "Downside-risk filter", "Predicted five-day downside risk can improve the base strategy.",
          "Nested threshold selection using past observations only.",
@@ -153,8 +156,15 @@ def performance_metrics(returns: pd.Series, periods_per_year: float = 252 / 5) -
 
 
 def build_features(frame: pd.DataFrame, horizon: int = 5) -> pd.DataFrame:
-    """Create features known at the close and a future-return label."""
+    """Create close-t features and an executable next-open forward return.
+
+    A signal formed after close t enters at open t+1 and exits at open
+    t+horizon+1.  The signal-date close is never treated as a fill price.
+    """
+    if not {"Open", "Close"}.issubset(frame.columns):
+        raise ValueError("Feature construction requires adjusted Open and Close prices.")
     close = frame["Close"].astype(float).dropna()
+    open_price = frame["Open"].astype(float).reindex(close.index)
     returns = close.pct_change()
     delta = close.diff()
     gains = delta.clip(lower=0).rolling(14).mean()
@@ -173,12 +183,14 @@ def build_features(frame: pd.DataFrame, horizon: int = 5) -> pd.DataFrame:
     long_vol = returns.rolling(63).std() * np.sqrt(252)
     result["vol_ratio"] = result["vol_21"] / long_vol.replace(0, np.nan)
     result["downside_vol_21"] = returns.clip(upper=0).rolling(21).std() * np.sqrt(252)
-    result["future_return"] = close.shift(-horizon) / close - 1
+    result["entry_open"] = open_price.shift(-EXECUTION_LAG_SESSIONS)
+    result["exit_open"] = open_price.shift(-(horizon + EXECUTION_LAG_SESSIONS))
+    result["future_return"] = result["exit_open"] / result["entry_open"] - 1
     result["label"] = (result["future_return"] > 0).astype(float)
     result["risk_label"] = (result["future_return"] <= -0.02).astype(float)
-    result.loc[close.shift(-horizon).isna(), ["future_return", "label", "risk_label"]] = np.nan
-    # Keep the direction-model history unchanged when longer-horizon candidate
-    # features are added. Each candidate drops only the columns it actually uses.
+    result.loc[result["exit_open"].isna(), ["future_return", "label", "risk_label"]] = np.nan
+    # Each candidate drops only the columns it actually uses; all labels share
+    # the same explicit next-open execution convention.
     return result.dropna(subset=list(FEATURES) + ["future_return", "label", "risk_label"])
 
 
@@ -239,7 +251,7 @@ def fit_logistic(x: np.ndarray, y: np.ndarray, iterations: int = 800,
 
 def chronological_evaluation(dataset: pd.DataFrame, min_train: int = 756,
                              retrain_every: int = 63, threshold: float = 0.55,
-                             embargo_days: int = 5, fee: float = 0.001,
+                             embargo_days: int = LABEL_SPAN_SESSIONS, fee: float = 0.001,
                              minimum_edge: float = 0.03) -> tuple[pd.DataFrame, dict]:
     """Expanding-window predictions; test rows are never used before prediction."""
     data = dataset.sort_index().copy()
@@ -249,8 +261,8 @@ def chronological_evaluation(dataset: pd.DataFrame, min_train: int = 756,
     decision_thresholds = pd.Series(np.nan, index=data.index, dtype=float)
     for start in range(min_train, len(data), retrain_every):
         end = min(start + retrain_every, len(data))
-        # Labels use the next five sessions. Excluding the final training rows
-        # prevents their label period from crossing into the unseen test block.
+        # Labels include the next-open execution lag plus five holding sessions.
+        # Excluding the final six rows prevents label overlap with the test block.
         train = data.iloc[:start - embargo_days]
         model = fit_logistic(train[list(FEATURES)].to_numpy(), train["label"].to_numpy())
         probabilities.iloc[start:end] = model.predict_proba(data.iloc[start:end][list(FEATURES)].to_numpy())
@@ -318,7 +330,7 @@ def roc_auc(y: pd.Series, score: pd.Series) -> float:
 
 
 def select_risk_threshold(train: pd.DataFrame, feature_names: tuple[str, ...],
-                          embargo_days: int = 5, fee: float = 0.001) -> float:
+                          embargo_days: int = LABEL_SPAN_SESSIONS, fee: float = 0.001) -> float:
     """Choose an execution threshold inside training data only.
 
     The final 20% of the outer training window acts as an inner validation set.
@@ -348,7 +360,7 @@ def select_risk_threshold(train: pd.DataFrame, feature_names: tuple[str, ...],
 
 
 def downside_risk_evaluation(dataset: pd.DataFrame, min_train: int = 756,
-                             retrain_every: int = 63, embargo_days: int = 5,
+                             retrain_every: int = 63, embargo_days: int = LABEL_SPAN_SESSIONS,
                              minimum_risk_probability: float = 0.20,
                              risk_margin: float = 0.05, fee: float = 0.001,
                              feature_names: tuple[str, ...] = RISK_FEATURES,
