@@ -1,0 +1,2 @@
+candidate,observations,average_5d_return,median_5d_return,positive_rate,spy_win_rate,average_excess_return,worst_5d_return,non_overlapping_observations,non_overlapping_average_excess,non_overlapping_spy_win_rate,excess_mean_lower_95,review_status
+growth_50,1,-0.0012244675041049467,-0.0012244675041049467,0.0,1.0,0.003072944877159296,-0.0012244675041049467,1,0.003072944877159296,1.0,,COLLECTING
