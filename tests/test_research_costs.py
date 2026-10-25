@@ -48,6 +48,13 @@ class ResearchCostTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             apply_cost_scenario(values, values, pd.Series([-0.1]), BASE_COST_SCENARIO)
 
+    def test_harmless_floating_point_weight_is_clipped(self):
+        result = apply_cost_scenario(
+            pd.Series([0.01]), pd.Series([1.0 + 2e-16]), pd.Series([0.0]),
+            BASE_COST_SCENARIO,
+        )
+        self.assertEqual(result.iloc[0]["invested_weight"], 1.0)
+
 
 if __name__ == "__main__":
     unittest.main()

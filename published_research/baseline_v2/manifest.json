@@ -1,0 +1,39 @@
+{
+  "run_at_utc": "2026-10-25T01:46:35+00:00",
+  "archive_version": "prices-a75b446717b99a55",
+  "archive_sha256": "a75b446717b99a557c439868dfb21968180f9ac9079541a105a536c337201760",
+  "assets": [
+    "SPY",
+    "EFA",
+    "EWJ",
+    "EEM",
+    "TLT",
+    "HYG",
+    "GLD",
+    "UUP"
+  ],
+  "parameters": {
+    "rebalance_sessions": 21,
+    "trend_window": 200,
+    "momentum_windows": [
+      126,
+      252
+    ],
+    "volatility_window": 63,
+    "target_volatility": 0.1,
+    "maximum_assets": 3,
+    "maximum_asset_weight": 0.5
+  },
+  "execution": "signal after close t; execute at open t+1; evaluate open-to-open",
+  "selection_rule": "top three positive-trend assets ranked by equal-weighted 6/12 month momentum",
+  "cost_requirement": "base and adverse scenarios; pre-tax",
+  "promotion_status": "HOLD_NOT_PROMOTED",
+  "gates": {
+    "annual_return_at_least_8pct": true,
+    "sharpe_at_least_1": false,
+    "sharpe_edge_at_least_0_15": false,
+    "maximum_drawdown_no_worse_than_15pct": true,
+    "majority_rolling_3y_profitable": true,
+    "cross_market_gate": "NOT_TESTED_IN_BASELINE_ROUND"
+  }
+}

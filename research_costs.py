@@ -92,11 +92,14 @@ def apply_cost_scenario(gross_return: pd.Series,
          turnover.rename("turnover")],
         axis=1,
     ).dropna()
-    if not aligned["invested_weight"].between(0, 1).all():
+    tolerance = 1e-12
+    if ((aligned["invested_weight"] < -tolerance) |
+            (aligned["invested_weight"] > 1 + tolerance)).any():
         raise ValueError("invested_weight must stay between 0 and 1.")
     if (aligned["turnover"] < 0).any():
         raise ValueError("turnover cannot be negative.")
 
+    aligned["invested_weight"] = aligned["invested_weight"].clip(0, 1)
     fund_expense_rate = 1 - (1 - scenario.annual_fund_expense) ** (1 / periods_per_year)
     cash_return_rate = (1 + scenario.annual_cash_yield) ** (1 / periods_per_year) - 1
     result = aligned.copy()
