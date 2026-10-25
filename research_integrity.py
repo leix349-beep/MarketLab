@@ -6,6 +6,7 @@ from pathlib import Path
 import pandas as pd
 
 from raw_price_archive import archived_csv_sha256
+from research_costs import scenario_table
 
 
 def _row(check_id: str, area: str, status: str, evidence: str,
@@ -89,6 +90,17 @@ def run_integrity_audit(root: Path = Path(".")) -> pd.DataFrame:
         "Revisions must retain both the old and new raw input, not only hashes.",
     ))
 
+    cost_scenarios = scenario_table()
+    required_cost_fields = {
+        "commission_bps", "half_spread_bps", "slippage_bps",
+        "annual_fund_expense", "annual_cash_yield", "tax_treatment",
+    }
+    cost_model_ok = (
+        set(cost_scenarios["name"]) == {"base", "adverse"}
+        and required_cost_fields.issubset(cost_scenarios.columns)
+        and (cost_scenarios["tax_treatment"] == "pre_tax_not_modeled").all()
+    )
+
     rows.extend([
         _row(
             "TIME-001", "timing", "PASS",
@@ -112,29 +124,36 @@ def run_integrity_audit(root: Path = Path(".")) -> pd.DataFrame:
         ),
         _row(
             "COST-001", "cost", "PASS",
-            "Archived evaluations deduct a fixed 0.10% one-way cost from turnover.",
+            "Legacy evaluations deduct a fixed turnover fee; new candidates have an explicit turnover-linked scenario engine.",
             "Every strategy comparison must deduct a visible turnover-linked cost.",
         ),
         _row(
-            "COST-002", "cost", "FAIL",
-            "The cost model does not separately represent bid-ask spread, slippage, fund fees, cash yield or tax assumptions.",
+            "COST-002", "cost", "PASS" if cost_model_ok else "FAIL",
+            ("Base and adverse scenarios separately disclose commission, half-spread, slippage, fund expense and cash yield; outputs are explicitly pre-tax."
+             if cost_model_ok else "The required two-scenario cost fields are incomplete."),
             "New candidates need a documented base cost plus adverse cost scenarios and cash return.",
         ),
     ])
     return pd.DataFrame(rows)
 
 
-def write_audit(root: Path = Path("."), audit_date: str = "2026-10-22") -> tuple[Path, Path]:
+def write_audit(root: Path = Path("."), audit_date: str = "2026-10-24") -> tuple[Path, Path]:
     audit = run_integrity_audit(root)
     output_dir = root / "published_research" / "audits"
     output_dir.mkdir(parents=True, exist_ok=True)
     csv_path = output_dir / f"{audit_date}_research_integrity.csv"
     md_path = output_dir / f"{audit_date}_research_integrity.md"
     audit.to_csv(csv_path, index=False)
+    if (audit["status"] == "PASS").all():
+        verdict = ("**Verdict: INFRASTRUCTURE READY FOR NEW CANDIDATE RESEARCH.** "
+                   "This clears the research plumbing only; it does not promote any existing strategy.")
+    else:
+        verdict = ("**Verdict: BLOCKED FOR NEW MODEL PROMOTION.** Daily collection and prospective "
+                   "paper tracking may continue, but archived historical returns cannot promote a strategy.")
     lines = [
         f"# Research Integrity Audit — {audit_date}",
         "",
-        "**Verdict: BLOCKED FOR NEW MODEL PROMOTION.** Daily collection and prospective paper tracking may continue, but archived historical returns cannot promote a strategy.",
+        verdict,
         "",
         "| Check | Area | Status | Evidence | Required action |",
         "|---|---|---|---|---|",

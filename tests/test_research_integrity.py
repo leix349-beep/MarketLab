@@ -15,7 +15,7 @@ class ResearchIntegrityTests(unittest.TestCase):
         self.assertEqual(audit.loc["TIME-002", "status"], "PASS")
         self.assertEqual(audit.loc["LEAK-001", "status"], "PASS")
         self.assertEqual(audit.loc["LEAK-002", "status"], "PASS")
-        self.assertEqual(audit.loc["COST-002", "status"], "FAIL")
+        self.assertEqual(audit.loc["COST-002", "status"], "PASS")
 
     def test_every_check_has_evidence_and_requirement(self):
         audit = run_integrity_audit(Path("."))

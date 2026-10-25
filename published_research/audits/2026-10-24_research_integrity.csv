@@ -1,0 +1,11 @@
+check_id,area,status,evidence,requirement
+DATA-001,data,PASS,14 dated snapshots; 13 unique tickers; no duplicate date/ticker rows.,Each archived observation must have one row per date and ticker.
+DATA-002,data,PASS,"Engineered training panel has provider, coverage and SHA-256 metadata.","Every evaluated panel must carry source, coverage and content fingerprint."
+DATA-003,data,PASS,1 immutable raw adjusted-OHLCV archive version(s) pass manifest hash verification.,Freeze the exact raw OHLC input before evaluating a new candidate.
+DATA-004,data,PASS,2 legacy labeled end date(s) had multiple hashes and remain unreconstructable; new revisions are retained as content-addressed raw versions.,"Revisions must retain both the old and new raw input, not only hashes."
+TIME-001,timing,PASS,Feature rows are formed after close t; executable returns enter at open[t+1] and exit at open[t+6]. Tests vary close-t independently from fill prices.,A close-t signal may execute no earlier than open[t+1] (or a predeclared later price).
+TIME-002,timing,PASS,Prospective paper scoring enters on the next archived session and evaluates five sessions later; unit tests cover the delay.,Prospective observations must never use the signal-date close as an executable fill.
+LEAK-001,leakage,PASS,Chronological classifier refits use a six-session label embargo covering the next-open lag and five-session holding period; tests verify future labels do not alter earlier predictions.,Training labels may not overlap the unseen test block.
+LEAK-002,leakage,PASS,Reported five-session model returns are sampled every five rows and paper scorecards do not compound overlapping outcomes.,Overlapping outcomes may be described but not compounded as independent returns.
+COST-001,cost,PASS,Legacy evaluations deduct a fixed turnover fee; new candidates have an explicit turnover-linked scenario engine.,Every strategy comparison must deduct a visible turnover-linked cost.
+COST-002,cost,PASS,"Base and adverse scenarios separately disclose commission, half-spread, slippage, fund expense and cash yield; outputs are explicitly pre-tax.",New candidates need a documented base cost plus adverse cost scenarios and cash return.
