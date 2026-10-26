@@ -1,0 +1,15 @@
+{
+  "archive_version": "prices-a75b446717b99a55",
+  "parameters_changed": false,
+  "maximum_daily_reconciliation_error": {
+    "base": 3.174543961037557e-16,
+    "adverse": 2.9349352809182605e-16
+  },
+  "base_to_adverse_annual_return_penalty": 0.014670758588523514,
+  "average_cash_weight": 0.18513302621699324,
+  "weakest_calendar_year": 2022,
+  "weakest_calendar_year_sharpe": -0.3094859102198882,
+  "diagnosis": "Return consistency and selection quality are the first problem to test; costs materially worsen the result but do not explain the base-case Sharpe failure.",
+  "next_single_hypothesis": "Test whether a fixed broad defensive sleeve improves weak-regime consistency without increasing turnover or changing the frozen signal parameters.",
+  "promotion_status": "HOLD_NOT_PROMOTED"
+}

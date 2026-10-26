@@ -122,12 +122,17 @@ def simulate_target_weights(target_weights: pd.DataFrame, open_returns: pd.DataF
         current = asset_values / total
         current_cash = float(cash_value / total)
         previous_target = target.copy()
-        rows.append({
+        row = {
             "date": date, "gross_return": gross_return, "turnover": turnover,
             "trading_cost": trading_cost, "fund_expense": fund_expense,
             "cash_income": cash_income, "net_return": net_return,
             "invested_weight": float(desired.sum()),
-        })
+            "trading_cost_effect": -pre_cost_total * trading_cost,
+        }
+        for ticker in targets.columns:
+            row[f"weight__{ticker}"] = float(desired[ticker])
+            row[f"contribution__{ticker}"] = float(desired[ticker] * returns[ticker])
+        rows.append(row)
     return pd.DataFrame(rows).set_index("date")
 
 
