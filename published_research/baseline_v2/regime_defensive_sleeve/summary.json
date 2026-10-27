@@ -1,0 +1,27 @@
+{
+  "archive_version": "prices-a75b446717b99a55",
+  "pre_registered_change": {
+    "regime": "SPY close below 200-day moving average, executed next open",
+    "tactical_weight_while_defensive": 0.8,
+    "fixed_defensive_weight_while_defensive": 0.2,
+    "defensive_assets_equal_weighted": [
+      "TLT",
+      "GLD",
+      "UUP"
+    ]
+  },
+  "defensive_regime_share": 0.17743362831858406,
+  "parameters_changed_after_results": false,
+  "holdout_warning": "The 2023+ segment is retrospective and not clean OOS because its history was already observed before this hypothesis was frozen.",
+  "base_full_sharpe_change": -0.0017048216501062141,
+  "base_holdout_sharpe_change": 0.0227115911407767,
+  "gates": {
+    "full_annual_return_at_least_8pct": true,
+    "full_sharpe_at_least_1": false,
+    "full_maximum_drawdown_no_worse_than_15pct": true,
+    "holdout_sharpe_improves": true,
+    "adverse_annual_return_at_least_8pct": false
+  },
+  "hypothesis_status": "REJECTED",
+  "promotion_status": "HOLD_NOT_PROMOTED"
+}
