@@ -1,0 +1,36 @@
+{
+  "archive_version": "prices-a75b446717b99a55",
+  "pre_registered_structure": {
+    "growth_assets": [
+      "SPY",
+      "EFA",
+      "EWJ",
+      "EEM",
+      "HYG"
+    ],
+    "defensive_assets": [
+      "TLT",
+      "GLD",
+      "UUP"
+    ],
+    "growth_budget": 0.7,
+    "defensive_budget": 0.3,
+    "growth_selections": 2,
+    "defensive_selections": 1
+  },
+  "parameters_changed_after_results": false,
+  "holdout_warning": "The 2023+ segment is retrospective and not clean OOS because its history was already observed.",
+  "positive_equity_market_count": 4,
+  "largest_positive_asset_contribution_share": 0.3524471200194767,
+  "gates": {
+    "full_annual_return_at_least_8pct": false,
+    "full_sharpe_at_least_1": false,
+    "full_maximum_drawdown_no_worse_than_15pct": false,
+    "adverse_annual_return_at_least_8pct": false,
+    "holdout_annual_return_positive": true,
+    "at_least_three_equity_markets_contribute_positive": true,
+    "largest_positive_asset_contribution_below_40pct": true
+  },
+  "candidate_status": "REJECTED",
+  "promotion_status": "HOLD_NOT_PROMOTED"
+}
