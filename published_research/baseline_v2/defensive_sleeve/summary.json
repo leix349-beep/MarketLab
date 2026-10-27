@@ -1,0 +1,25 @@
+{
+  "archive_version": "prices-a75b446717b99a55",
+  "pre_registered_change": {
+    "tactical_weight": 0.8,
+    "fixed_defensive_weight": 0.2,
+    "defensive_assets_equal_weighted": [
+      "TLT",
+      "GLD",
+      "UUP"
+    ]
+  },
+  "parameters_changed_after_results": false,
+  "holdout_warning": "The 2023+ segment is retrospective and not clean OOS because its history was already observed before this hypothesis was frozen.",
+  "base_full_sharpe_change": 0.05947185652347997,
+  "base_holdout_sharpe_change": 0.08467676360315801,
+  "gates": {
+    "full_annual_return_at_least_8pct": false,
+    "full_sharpe_at_least_1": true,
+    "full_maximum_drawdown_no_worse_than_15pct": true,
+    "holdout_sharpe_improves": true,
+    "adverse_annual_return_at_least_8pct": false
+  },
+  "hypothesis_status": "REJECTED",
+  "promotion_status": "HOLD_NOT_PROMOTED"
+}
