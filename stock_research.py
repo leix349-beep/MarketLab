@@ -14,8 +14,8 @@ from universe import ASSETS, asset_label, sector_etf_for
 language = st.sidebar.radio("Language / 语言", ["English", "中文"], horizontal=True,key="global_language")
 zh = language == "中文"
 T = {
- "title": "Xiang’s MarketLab",
- "caption": "量化市场研究｜学生项目｜仅回测，不发送订单" if zh else "Quantitative market research · Student project · Backtests only",
+ "title": "Xiang’s MarketLab 1.0",
+ "caption": "价格型策略研究档案｜学生项目｜仅回测，不发送订单" if zh else "Price-signal research archive · Student project · Backtests only",
  "params": "研究参数" if zh else "Research Parameters", "asset": "股票 / ETF" if zh else "Stock / ETF",
  "range": "历史范围" if zh else "History Range", "fast": "短期均线" if zh else "Fast Moving Average",
  "slow": "长期均线" if zh else "Slow Moving Average", "rsi": "买入 RSI 上限" if zh else "Maximum Buy RSI",
@@ -23,6 +23,10 @@ T = {
  "cost": "手续费/滑点 %" if zh else "Fees / Slippage %", "run": "运行研究" if zh else "Run Analysis",
 }
 st.title(T["title"]); st.caption(T["caption"])
+st.info(
+    "MarketLab 1.0 已完成并冻结。现有工具用于复现实验；所有候选模型均未通过正式晋级门槛，不应用于真实交易。" if zh else
+    "MarketLab 1.0 is complete and frozen. These tools reproduce research experiments; no candidate passed the promotion gates or is approved for live trading."
+)
 
 with st.sidebar:
     st.subheader("分析设置" if zh else "Analysis Setup")

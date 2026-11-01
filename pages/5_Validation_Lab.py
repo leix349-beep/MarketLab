@@ -12,6 +12,8 @@ language = st.sidebar.radio("Language / 语言", ["English", "中文"], horizont
 zh = language == "中文"
 st.title("Xiang’s MarketLab · 样本外验证" if zh else "Xiang’s MarketLab · Validation Lab")
 st.caption("让参数只看过去，再用未见数据检验。" if zh else "Tune on the past, then test on data the model has never seen.")
+st.info("这是1.0方法演示，不代表现有模型已通过样本外验证。" if zh else
+        "This is a 1.0 methodology demonstration; it does not mean the current models passed out-of-sample validation.")
 
 symbol = st.sidebar.selectbox("研究标的" if zh else "Research Asset", list(ASSETS), format_func=asset_label)
 years = st.sidebar.slider("历史年数" if zh else "History (years)", 3, 10, 7)

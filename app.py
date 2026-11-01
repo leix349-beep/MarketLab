@@ -1,7 +1,7 @@
 import streamlit as st
 from ui_theme import apply_theme
 
-st.set_page_config(page_title="Xiang's MarketLab", page_icon=":material/monitoring:", layout="wide")
+st.set_page_config(page_title="Xiang's MarketLab 1.0", page_icon=":material/monitoring:", layout="wide")
 apply_theme()
 
 page = st.navigation([

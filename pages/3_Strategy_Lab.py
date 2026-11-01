@@ -11,6 +11,8 @@ language=st.sidebar.radio("Language / 语言",["English","中文"],horizontal=Tr
 zh=language=="中文"
 st.title("Xiang’s MarketLab · 策略实验室" if zh else "Xiang’s MarketLab · Strategy Lab")
 st.caption("在相同数据、成本和成交时点下公平比较不同规则。" if zh else "Compare rule-based strategies under identical data, cost and execution assumptions.")
+st.info("这是1.0历史实验工具；结果不会晋级为交易模型。" if zh else
+        "This is a historical 1.0 experiment tool. Its results are not eligible for model promotion.")
 
 symbol=st.sidebar.selectbox("股票 / ETF" if zh else "Stock / ETF",list(ASSETS),format_func=asset_label,key="strategy_symbol")
 years=st.sidebar.slider("历史年数" if zh else "History (years)",1,10,5,key="strategy_years")

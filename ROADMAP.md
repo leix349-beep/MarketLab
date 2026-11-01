@@ -1,5 +1,7 @@
 # MarketLab Research & Product Roadmap
 
+> **1.0 closeout (2026-11-01):** feature development and model tuning are frozen. This roadmap is retained as historical planning context, not an active promise of future 1.0 work. The final decision is `HOLD_NOT_PROMOTED`; see [`V1_FINAL_STATUS.md`](V1_FINAL_STATUS.md). Reusable infrastructure will move to the separate MarketLab 2.0 project.
+
 MarketLab is a bilingual, explainable student research platform for studying U.S. equities. Its goal is not to promise profitable predictions, but to produce reproducible experiments, honest evidence, and progressively stronger mathematical analysis.
 
 ## Progress legend

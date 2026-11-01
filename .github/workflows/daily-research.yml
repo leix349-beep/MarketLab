@@ -38,14 +38,16 @@ jobs:
         run: python -m unittest discover -s tests -v
 
       - name: Build daily snapshot
-        run: python daily_monitor.py
+        # MarketLab 1.0 is frozen. Preserve the reusable market observation
+        # archive, but do not create new signals from retired candidates.
+        run: python daily_monitor.py --snapshot-only
 
       - name: Commit new observation
         if: github.event_name != 'push'
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add published_research/daily published_research/paper_tracking
+          git add published_research/daily
           if git diff --cached --quiet; then
             echo "No new market observation to commit."
           else

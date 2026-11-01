@@ -334,13 +334,15 @@ def markdown_report(snapshot: pd.DataFrame, factors: pd.DataFrame | None = None,
     return "\n".join(lines)
 
 
-def main() -> None:
+def main(snapshot_only: bool = False) -> None:
     snapshot = download_snapshot()
     market_date = snapshot["date"].max()
     OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
     snapshot_path = OUTPUT_DIR / f"{market_date}.csv"
     if snapshot_path.exists():
         print(f"Market date {market_date} is already archived; preserving the original observation without backfilling newer context.")
+        if snapshot_only:
+            return
         # A code deployment can introduce paper tracking after the daily market
         # snapshot was already archived. Freeze today's signal from the fresh
         # download without rewriting the immutable observation.
@@ -363,12 +365,14 @@ def main() -> None:
     if not news.empty and not news_path.exists():
         news.to_csv(news_path, index=False)
     (OUTPUT_DIR / f"{market_date}.md").write_text(markdown_report(snapshot, factors, news), encoding="utf-8")
-    record_paper_signal(snapshot)
-    score_mature_signal(snapshot)
-    update_paper_scorecard()
+    if not snapshot_only:
+        record_paper_signal(snapshot)
+        score_mature_signal(snapshot)
+        update_paper_scorecard()
     print(f"Saved {len(snapshot)} observations for {market_date}.")
     print("Freshness is evaluated in the Daily Monitor; duplicate market dates are intentionally not recommitted.")
 
 
 if __name__ == "__main__":
-    main()
+    import sys
+    main(snapshot_only="--snapshot-only" in sys.argv[1:])

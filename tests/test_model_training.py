@@ -36,7 +36,8 @@ class ModelTrainingTests(unittest.TestCase):
     def test_daily_workflow_does_not_retrain_archived_models(self):
         workflow = Path(".github/workflows/daily-research.yml").read_text(encoding="utf-8")
         self.assertNotIn("python model_training.py", workflow)
-        self.assertIn("python daily_monitor.py", workflow)
+        self.assertIn("python daily_monitor.py --snapshot-only", workflow)
+        self.assertNotIn("git add published_research/daily published_research/paper_tracking", workflow)
 
     def test_dataset_fingerprint_is_stable_and_detects_revision(self):
         dates = pd.bdate_range("2026-01-01", periods=3)

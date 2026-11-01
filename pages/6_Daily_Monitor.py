@@ -12,6 +12,8 @@ zh = language == "中文"
 st.title("Xiang’s MarketLab · 每日监控" if zh else "Xiang’s MarketLab · Daily Monitor")
 st.caption("把每天自动保存的观察放在同一张可审计的时间线上。" if zh else
            "An auditable timeline of the observations saved automatically each day.")
+st.info("1.0模型信号已停止新增；每日任务只继续保存可迁移的市场快照。" if zh else
+        "New 1.0 model signals are disabled. The daily job now preserves only reusable market snapshots.")
 
 history = load_snapshot_history()
 if history.empty:
@@ -59,7 +61,7 @@ if provenance is not None and frontier_path.exists():
             if not spy_rows.empty:
                 spy = spy_rows.iloc[-1]
 
-        st.subheader("模型状态" if zh else "Model Status")
+        st.subheader("归档模型状态" if zh else "Archived Model Status")
         st.caption(("把训练结论、数据成熟度和当前纸面候选放在同一处；状态不会因单次好结果自动升级。" if zh else
                     "Training verdicts, data maturity, and the current paper candidate in one place; a single favorable result never upgrades the status."))
         m1, m2, m3, m4 = st.columns(4)
@@ -72,9 +74,9 @@ if provenance is not None and frontier_path.exists():
         m2.metric("成熟训练样本" if zh else "Mature Training Sample", latest_labeled_date)
         m3.metric("等待成熟" if zh else "Awaiting Labels",
                   f"{pending_sessions} 个交易日" if zh else f"{pending_sessions} sessions")
-        m4.metric("当前状态" if zh else "Current Status",
-                  "观察" if zh else "PAPER TRACKING",
-                  f"{tracking_count} 个候选" if zh else f"{tracking_count} candidate(s)",
+        m4.metric("最终状态" if zh else "Final Status",
+                  "未晋级 / 已归档" if zh else "NOT PROMOTED / ARCHIVED",
+                  f"历史候选 {tracking_count} 个" if zh else f"{tracking_count} historical candidate(s)",
                   delta_color="off")
 
         c1, c2, c3, c4 = st.columns(4)

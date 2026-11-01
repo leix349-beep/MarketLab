@@ -6,7 +6,7 @@ from unittest.mock import patch
 import numpy as np
 import pandas as pd
 
-from daily_monitor import (candidate_weights, markdown_report, score_mature_signal, summarize,
+from daily_monitor import (candidate_weights, main, markdown_report, score_mature_signal, summarize,
                            update_paper_scorecard)
 
 
@@ -57,6 +57,21 @@ class DailyMonitorTests(unittest.TestCase):
         self.assertLessEqual(conservative["growth_share"].max(), 0.25)
         with self.assertRaises(ValueError):
             candidate_weights(pd.DataFrame(rows), growth_sleeve=1.1)
+
+    def test_snapshot_only_does_not_extend_retired_paper_signals(self):
+        with TemporaryDirectory(dir=Path("tests")) as directory:
+            daily = Path(directory)
+            snapshot = pd.DataFrame([{"date": "2026-11-02", "ticker": "SPY", "close": 100.0}])
+            snapshot.to_csv(daily / "2026-11-02.csv", index=False)
+            with patch("daily_monitor.OUTPUT_DIR", daily), \
+                 patch("daily_monitor.download_snapshot", return_value=snapshot), \
+                 patch("daily_monitor.record_paper_signal") as record, \
+                 patch("daily_monitor.score_mature_signal") as score, \
+                 patch("daily_monitor.update_paper_scorecard") as update:
+                main(snapshot_only=True)
+            record.assert_not_called()
+            score.assert_not_called()
+            update.assert_not_called()
 
     def test_paper_outcome_uses_next_session_as_entry(self):
         with TemporaryDirectory(dir=Path("tests")) as directory:
