@@ -1,6 +1,6 @@
 # MarketLab
 
-> **Version 1.0 is complete and frozen.** It remains online as a reproducible price-signal research archive. No tested candidate passed the full promotion gates, and none is approved for live trading. Future expectations, earnings and capital-flow research will be developed separately as MarketLab 2.0.
+> **MarketLab 1.0 is Xiang’s interactive research portfolio.** The overview presents archived market data and allows readers to compare historical strategy performance under base and stress costs. Candidate strategies remain at the research stage.
 
 MarketLab is a bilingual stock research website I built to connect ideas from mathematics with financial data. I use it to test trading rules, compare stocks and sectors, and keep a record of both successful and unsuccessful experiments.
 
@@ -45,7 +45,7 @@ MarketLab 是我将数学知识与金融数据结合起来制作的双语股票�
 
 目前网站包括股票图表、技术指标、历史回测、交易记录、板块研究、资产比较、策略比较和回归分析。它是学生研究项目，不提供投资建议，也不会提交订单。
 
-1.0版本现已冻结，作为可复现的价格信号研究档案保留。最好的冻结基线在基础成本下历史年化收益为8.28%、Sharpe为0.94、最大回撤为-9.59%，但没有通过完整晋级标准，也不用于真实交易。财报预期与资金轮动研究将转入独立的MarketLab 2.0。
+1.0 是我的交互式市场研究作品。首页可以查看存档行情，并比较基础与压力成本下的历史策略表现。趋势动量基线在基础成本下历史年化收益为 8.28%、夏普比率为 0.94、最大回撤为 -9.59%，未通过完整验证门槛。
 
 </details>
 

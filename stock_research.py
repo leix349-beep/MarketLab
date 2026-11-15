@@ -24,8 +24,8 @@ T = {
 }
 st.title(T["title"]); st.caption(T["caption"])
 st.info(
-    "MarketLab 1.0 已完成并冻结。现有工具用于复现实验；所有候选模型均未通过正式晋级门槛，不应用于真实交易。" if zh else
-    "MarketLab 1.0 is complete and frozen. These tools reproduce research experiments; no candidate passed the promotion gates or is approved for live trading."
+    "此工作台用于复现历史研究。候选策略仍处于研究阶段。" if zh else
+    "Reproduce historical experiments in this workspace. The candidate strategies remain in research."
 )
 
 with st.sidebar:

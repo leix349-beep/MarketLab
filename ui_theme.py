@@ -4,9 +4,10 @@ import streamlit as st
 
 
 def apply_theme() -> None:
-    marketlab = pio.templates["plotly_white"]
+    pio.templates["marketlab"] = pio.templates["plotly_white"].to_plotly_json()
+    marketlab = pio.templates["marketlab"]
     marketlab.layout.update(
-        colorway=["#477B9E", "#79A895", "#E7A977", "#7C6FA7", "#5F9EA0", "#D96767"],
+        colorway=["#087E75", "#4266AA", "#B77726", "#7862A4", "#427C9A", "#B34F48"],
         paper_bgcolor="rgba(0,0,0,0)",
         plot_bgcolor="rgba(0,0,0,0)",
         font=dict(color="#20242A"),
@@ -25,7 +26,7 @@ def apply_theme() -> None:
           --ml-heading: #111318;
           --ml-ink: #20242a;
           --ml-muted: #6b7280;
-          --ml-accent: #477b9e;
+          --ml-accent: #087e75;
           --ml-accent-soft: #eaf1f5;
           --ml-sage: #79a895;
           --ml-apricot: #e7a977;
@@ -36,6 +37,14 @@ def apply_theme() -> None:
         }
 
         html { scroll-behavior: smooth; }
+        .st-key-portfolio_hero {
+          padding: clamp(1.25rem, 4vw, 3rem);
+          border-radius: 20px;
+          background: radial-gradient(ellipse at 95% 0%, #256c73, transparent 70%), #13283d;
+          color: #f3fbfd;
+        }
+        .st-key-portfolio_hero h1, .st-key-portfolio_hero p,
+        .st-key-portfolio_hero [data-testid="stCaptionContainer"] { color: #f3fbfd; }
         body, [data-testid="stAppViewContainer"] {
           font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans SC", sans-serif;
           color: var(--ml-ink);
@@ -45,12 +54,12 @@ def apply_theme() -> None:
             radial-gradient(circle at 84% 8%, rgba(71, 123, 158, .075), transparent 27rem),
             radial-gradient(circle at 68% 74%, rgba(121, 168, 149, .065), transparent 32rem),
             radial-gradient(circle at 20% 92%, rgba(231, 169, 119, .045), transparent 25rem),
-            #fafaf7;
+            #f8fafc;
           background-attachment: fixed;
         }
         [data-testid="stHeader"] { background: rgba(250, 250, 247, .84); backdrop-filter: blur(14px); }
         [data-testid="stSidebar"] {
-          background: #f1f5f7;
+          background: #ebf2f5;
           border-right: 1px solid var(--ml-line);
         }
         [data-testid="stSidebarContent"] { padding-top: 1.2rem; }
