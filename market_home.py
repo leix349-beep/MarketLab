@@ -8,17 +8,14 @@ import streamlit as st
 ROOT = Path(__file__).resolve().parent / "published_research"
 zh = st.sidebar.radio("Language / 语言", ["English", "中文"], horizontal=True, key="global_language") == "中文"
 
-with st.container(key="portfolio_hero"):
-    st.caption("XIANG  /  RESEARCH PORTFOLIO")
-    st.title("MarketLab")
-    st.markdown("读懂市场，检验策略。" if zh else "Explore markets. Test strategies.")
-    st.caption("探索股票与板块、比较风险，并复现历史策略实验。" if zh else
-               "Explore stocks and sectors, compare risk, and reproduce historical strategy experiments.")
-
-for col, path, label in zip(st.columns(3), (
-    "stock_research.py", "pages/1_Sector_Research.py", "pages/5_Validation_Lab.py",
-), ("研究股票", "浏览板块", "检验策略") if zh else ("Research a stock", "Explore sectors", "Test a strategy")):
-    col.page_link(path, label=label, width="stretch")
+with st.container(key="portfolio_masthead"):
+    st.title("Xiang’s MarketLab")
+    with st.container(key="portfolio_links"):
+        for col, path, label, icon in zip(st.columns(3), (
+            "stock_research.py", "pages/1_Sector_Research.py", "pages/5_Validation_Lab.py",
+        ), ("个股研究", "板块研究", "策略验证") if zh else ("Stocks", "Sectors", "Validation"),
+            (":material/show_chart:", ":material/donut_large:", ":material/verified:")):
+            col.page_link(path, label=label, icon=icon, width="stretch")
 
 market, evidence = st.tabs(["市场快照", "策略实证"] if zh else ["Market snapshot", "Strategy evidence"])
 
@@ -26,18 +23,19 @@ with market:
     snapshots = sorted((ROOT / "daily").glob("????-??-??.csv"))
     if snapshots:
         snapshot = pd.read_csv(snapshots[-1])
-        st.subheader("市场快照" if zh else "Market snapshot")
-        st.caption(("存档交易日 " if zh else "Archived session ") + snapshots[-1].stem)
         windows = {"1D": "return_1d", "5D": "return_5d", "1M": "return_21d"}
-        window = st.radio("比较区间" if zh else "Return window", list(windows), horizontal=True)
+        date, controls = st.columns([3, 2], vertical_alignment="center")
+        date.markdown(("**存档交易日**" if zh else "**Archived session**") + f" · {snapshots[-1].stem}")
+        window = controls.radio("比较区间" if zh else "Return window", list(windows),
+                                horizontal=True, label_visibility="collapsed")
         column = windows[window]
         data = snapshot.dropna(subset=[column]).sort_values(column)
         fig = px.bar(data, x=column, y="ticker", orientation="h",
                      color=data[column].ge(0), color_discrete_map={True: "#087e75", False: "#b34f48"},
                      template="marketlab")
         fig.update_layout(showlegend=False, height=420, xaxis_title=None, yaxis_title=None,
-                          margin=dict(t=12, b=24, l=12, r=24))
-        fig.update_xaxes(tickformat=".1%")
+                          plot_bgcolor="#ffffff", margin=dict(t=12, b=24, l=12, r=24))
+        fig.update_xaxes(tickformat=".1%", zerolinewidth=2)
         fig.update_traces(hovertemplate="%{y}: %{x:+.2%}<extra></extra>")
         st.plotly_chart(fig, theme=None, width="stretch")
     else:
