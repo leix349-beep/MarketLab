@@ -19,7 +19,7 @@ with market:
         windows = {"1D": "return_1d", "5D": "return_5d", "1M": "return_21d"}
         with st.container(key="market_board", border=True):
             date, controls = st.columns([3, 2], vertical_alignment="center")
-            date.markdown(("**历史行情**" if zh else "**Market close**") + f" · {snapshots[-1].stem}")
+            date.markdown(("**存档交易日**" if zh else "**Archived session**") + f" · {snapshots[-1].stem}")
             window = controls.segmented_control(
                 "比较区间" if zh else "Return window", list(windows),
                 default="1D", selection_mode="single", label_visibility="collapsed",
@@ -63,9 +63,12 @@ with evidence:
                f"spy_vol_target__{cost}": "波动目标 SPY" if zh else "Volatility-targeted SPY"}
     wealth = (1 + series[list(columns)]).cumprod().mul(100).rename(columns=columns)
     fig = px.line(wealth, template="marketlab")
-    fig.update_layout(height=390, xaxis_title=None, yaxis_title="起始值 100" if zh else "Growth of 100",
+    fig.update_layout(height=390, hovermode="x unified", xaxis_title=None,
+                      yaxis_title="起始值 100" if zh else "Growth of 100",
                       legend_title_text=None, legend=dict(orientation="h", y=1.1),
                       margin=dict(t=28, b=24, l=12, r=12))
+    fig.update_xaxes(hoverformat="%Y-%m-%d")
+    fig.update_traces(hovertemplate="%{y:.2f}")
     st.plotly_chart(fig, theme=None, width="stretch")
     st.caption("历史模拟结果。候选策略未通过完整验证门槛，无真实交易收益。" if zh else
                "Historical simulation. The candidate fell short of the validation gates. No live trading returns.")
