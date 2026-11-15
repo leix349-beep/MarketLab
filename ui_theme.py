@@ -37,26 +37,17 @@ def apply_theme() -> None:
         }
 
         html { scroll-behavior: smooth; }
-        .st-key-portfolio_masthead {
-          padding: clamp(.9rem, 2vw, 1.5rem);
-          border: 1px solid #dae5e5;
-          border-top: 3px solid #087e75;
-          border-radius: 16px;
-          background: linear-gradient(115deg, #fff 40%, #eaf5f2);
-        }
-        .st-key-portfolio_masthead h1 {
-          font-size: clamp(1.8rem, 4vw, 3rem);
-          padding: 0;
-        }
-        .st-key-portfolio_links a[data-testid="stPageLink-NavLink"] {
-          margin: 0;
-          border: 1px solid #d6e3e3;
-          border-radius: 10px;
+        .st-key-market_board {
           background: #fff;
+          border-color: #dce5eb;
+          border-radius: 16px;
         }
-        .st-key-portfolio_links a[data-testid="stPageLink-NavLink"]:hover {
-          border-color: #087e75;
-          background: #e9f5f2;
+        .st-key-market_board [data-testid="stMetric"] {
+          font-variant-numeric: tabular-nums;
+        }
+        .st-key-market_board [data-testid="stMetricValue"] {
+          font-size: clamp(1.15rem, 2.4vw, 1.8rem);
+          letter-spacing: -.025em;
         }
         body, [data-testid="stAppViewContainer"] {
           font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans SC", sans-serif;

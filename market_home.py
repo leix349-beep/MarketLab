@@ -8,14 +8,7 @@ import streamlit as st
 ROOT = Path(__file__).resolve().parent / "published_research"
 zh = st.sidebar.radio("Language / 语言", ["English", "中文"], horizontal=True, key="global_language") == "中文"
 
-with st.container(key="portfolio_masthead"):
-    st.title("Xiang’s MarketLab")
-    with st.container(key="portfolio_links"):
-        for col, path, label, icon in zip(st.columns(3), (
-            "stock_research.py", "pages/1_Sector_Research.py", "pages/5_Validation_Lab.py",
-        ), ("个股研究", "板块研究", "策略验证") if zh else ("Stocks", "Sectors", "Validation"),
-            (":material/show_chart:", ":material/donut_large:", ":material/verified:")):
-            col.page_link(path, label=label, icon=icon, width="stretch")
+st.title("Xiang’s MarketLab")
 
 market, evidence = st.tabs(["市场快照", "策略实证"] if zh else ["Market snapshot", "Strategy evidence"])
 
@@ -24,20 +17,33 @@ with market:
     if snapshots:
         snapshot = pd.read_csv(snapshots[-1])
         windows = {"1D": "return_1d", "5D": "return_5d", "1M": "return_21d"}
-        date, controls = st.columns([3, 2], vertical_alignment="center")
-        date.markdown(("**存档交易日**" if zh else "**Archived session**") + f" · {snapshots[-1].stem}")
-        window = controls.radio("比较区间" if zh else "Return window", list(windows),
-                                horizontal=True, label_visibility="collapsed")
-        column = windows[window]
-        data = snapshot.dropna(subset=[column]).sort_values(column)
-        fig = px.bar(data, x=column, y="ticker", orientation="h",
-                     color=data[column].ge(0), color_discrete_map={True: "#087e75", False: "#b34f48"},
-                     template="marketlab")
-        fig.update_layout(showlegend=False, height=420, xaxis_title=None, yaxis_title=None,
-                          plot_bgcolor="#ffffff", margin=dict(t=12, b=24, l=12, r=24))
-        fig.update_xaxes(tickformat=".1%", zerolinewidth=2)
-        fig.update_traces(hovertemplate="%{y}: %{x:+.2%}<extra></extra>")
-        st.plotly_chart(fig, theme=None, width="stretch")
+        with st.container(key="market_board", border=True):
+            date, controls = st.columns([3, 2], vertical_alignment="center")
+            date.markdown(("**历史行情**" if zh else "**Market close**") + f" · {snapshots[-1].stem}")
+            window = controls.segmented_control(
+                "比较区间" if zh else "Return window", list(windows),
+                default="1D", selection_mode="single", label_visibility="collapsed",
+            ) or "1D"
+            column = windows[window]
+            quotes = snapshot.set_index("ticker")[column]
+            for card, (ticker, name) in zip(st.columns(3), (
+                ("SPY", "S&P 500"), ("QQQ", "Nasdaq 100"), ("IWM", "Russell 2000"),
+            )):
+                value = quotes.get(ticker)
+                with card.container(border=True):
+                    st.metric(name, f"{value:+.2%}" if pd.notna(value) else "—")
+
+            data = snapshot.dropna(subset=[column]).sort_values(column)
+            fig = px.bar(data, x=column, y="ticker", orientation="h",
+                         color=data[column].ge(0),
+                         color_discrete_map={True: "#147c72", False: "#b65352"},
+                         template="marketlab")
+            fig.update_layout(showlegend=False, height=370, bargap=.42,
+                              xaxis_title=None, yaxis_title=None,
+                              margin=dict(t=4, b=26, l=12, r=12))
+            fig.update_xaxes(tickformat=".1%", zerolinewidth=2)
+            fig.update_traces(hovertemplate="%{y}: %{x:+.2%}<extra></extra>")
+            st.plotly_chart(fig, theme=None, width="stretch")
     else:
         st.info("暂无市场快照。" if zh else "No archived market snapshots yet.")
 
